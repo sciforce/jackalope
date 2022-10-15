@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from __future__ import annotations
 
 import datetime

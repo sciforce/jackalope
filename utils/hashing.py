@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 import hashlib
 from typing import Optional
 from utils.constants import HASH_COMPATIBILITY_VERSION
