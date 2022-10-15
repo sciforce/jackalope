@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from typing import Optional
 from pydantic import BaseModel
 import datetime

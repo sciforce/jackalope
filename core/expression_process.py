@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 import random
 from typing import Optional, Iterable
 

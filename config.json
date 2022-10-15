@@ -1,7 +1,7 @@
  {
   "host": "127.0.0.1",
   "port": 52252,
-  "snomed_path":  "snomed/Snapshot",
+  "snomed_path":  "snomed_rf2/Snapshot",
   "vocabs_path": "omop_vocab",
   "rebuild_omop": true,
   "backend": "sql",

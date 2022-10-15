@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from __future__ import annotations
 
 import os
@@ -181,7 +182,8 @@ class Ontology(nx.DiGraph):
                     day=date_int % 100,
                     )
             except KeyError:
-                _onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} in Module Dependency. Defaulting to 1970-01-01")
+                _onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} "
+                                     f"in Module Dependency. Defaulting to 1970-01-01")
                 return datetime.date(1970, 1, 1)
 
         snomed.version = {'SNOMED CT US': extract_date(SNOMED_US_MODULE)}
@@ -473,8 +475,8 @@ class Ontology(nx.DiGraph):
         ancestral_nodes = set()
 
         # Find all ancestors starting from the root node
-        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=SNOMED_ROOT, visited_nodes=set(),
-                                         ancestors=ancestral_nodes)
+        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=SNOMED_ROOT,
+                                         visited_nodes=set(), ancestors=ancestral_nodes)
 
         # Remove redundant ancestors
         clean_list = list(self.remove_redundant_parents(ancestral_nodes))
