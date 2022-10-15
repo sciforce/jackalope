@@ -1,7 +1,0 @@
-vocabulary_id,concept_code,concept_name,post_coordination_expression
-SciForce,SCI.01,Chemocautery of dysplasia of cervix uteri,"74580009 : { 405816004 =  25723000 ,  260686004 = 129404003 }"
-SciForce,G96.11,Dural tear,"15758002 | Disorder of meninges | + 417163006 | Injury | : 363698007 | Finding site | = 18545000 | Dura mater |, 116676008 | Associated morphology | = 125671007 | Rupture |"
-SciForce,I77.812,Thoracoabdominal aortic ectasia,"26660001 | Dilatation of aorta | : { 363698007 | Finding site | = 113262008| Thoracic aorta | }, { 363698007 | Finding site | = 7832008 | Abdominal aorta | } "
-SciForce,Q87.410,Marfan's syndrome with aortic dilation,26660001 | Dilation of aorta | + 19346006 |Marfan's syndrome|: 42752001 | Due to | = 19346006 | Marfan's syndrome |
-SciForce,G43.001,"Migraine without aura, not intractable, with status migrainosus","425007008 | Migraine without aura, not refractory | + 230467008 | Status migrainosus |"
-SciForce,I61.1,"Nontraumatic intracerebral hemorrhage in hemisphere, cortical",49422009 | Cortical hemorrhage |: 42752001 | Due to | = 789750003 | Spontaneous event |
