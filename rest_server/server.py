@@ -3,27 +3,24 @@ from __future__ import annotations
 import datetime
 import json
 import sys
+from datetime import datetime
 
+from flask import Flask
+from flask import jsonify
+from flask import request
+from flask_pydantic import validate
+
+from core import expression_process
 from core import ontology
 from core import vocab
+from rest_server import request_model
+from utils.constants import HASH_COMPATIBILITY_VERSION
 from utils.constants import JACKALOPE_HOST
 from utils.constants import JACKALOPE_VERSION
 from utils.constants import JACKALOPORT
 from utils.logger import jacka_logger
 from vocab_backend import csv_backend
 from vocab_backend import sql_backend
-
-from datetime import datetime
-
-from core import expression_process
-from rest_server import request_model
-from utils.constants import HASH_COMPATIBILITY_VERSION
-
-from flask import Flask
-from flask import jsonify
-from flask import request
-
-from flask_pydantic import validate
 
 server_logger = jacka_logger.getChild('RESTServer')
 app = Flask('Jackalope')
@@ -112,11 +109,15 @@ class JackalopeREST:
         if self.pickled_ont_path is not None:
             server_logger.debug("Pickle file provided. Loading from pickle. Ignoring SNOMED path.")
             server_logger.info("Unpickling saved SNOMED Ontology.")
-            self.ont = ontology.Ontology.load(self.pickled_ont_path)
-        else:
-            server_logger.info("Loading SNOMED Ontology from source RF2 files.")
-            self.ont = ontology.Ontology.build(self.snomed_path)
-            self.ont.populate(dump_filename="SNOMED")
+            try:
+                self.ont = ontology.Ontology.load(self.pickled_ont_path)
+                return
+            except FileNotFoundError:
+                server_logger.warning("Specified Pickle file not found!")
+
+        server_logger.info("Loading SNOMED Ontology from source RF2 files.")
+        self.ont = ontology.Ontology.build(self.snomed_path)
+        self.ont.populate(dump_filename="SNOMED")
 
         server_logger.info("Done.")
 
