@@ -4,7 +4,7 @@ from typing import Iterable
 
 import networkx as nx
 
-from core import hashing
+from utils import hashing
 from core import ontology
 from core.data_model import _RawRelationshipGroup
 from core.data_model import MetaRelationship

@@ -2,7 +2,7 @@ import cProfile
 import pathlib
 import pstats
 import sys
-from core.logger import jacka_logger
+from utils.logger import jacka_logger
 
 PROFILING = False
 

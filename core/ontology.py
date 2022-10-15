@@ -10,7 +10,13 @@ import pandas as pd
 
 import core.expression
 from core import data_model
-from core.logger import jacka_logger
+from utils.constants import DEFINED
+from utils.constants import FSN
+from utils.constants import ISA
+from utils.constants import SCT_MODEL_COMPONENT
+from utils.constants import SNOMED_ROOT
+from utils.constants import SNOMED_US_MODULE
+from utils.logger import jacka_logger
 
 _onto_logger = jacka_logger.getChild('Ontology')
 
@@ -22,16 +28,6 @@ class AccidentalEquivalency(BaseException):
 
     def __repr__(self):
         return f"Mapping to {self.sctid} must be done instead."
-
-
-# SNOMED constants
-ROOT = 138875005
-ROOT_MODULE = 900000000000012004
-MODEL_COMPONENT = 900000000000012004
-US_MODULE = 731000124108
-DEFINED = 900000000000073002
-FSN = 900000000000003001
-ISA = 116680003
 
 
 class Ontology(nx.DiGraph):
@@ -177,7 +173,7 @@ class Ontology(nx.DiGraph):
         def extract_date(module: int) -> datetime.date:
             try:
                 idx = (snomed.module_dependency_df['moduleId'] == module) & \
-                      (snomed.module_dependency_df['referencedComponentId'] == MODEL_COMPONENT)
+                      (snomed.module_dependency_df['referencedComponentId'] == SCT_MODEL_COMPONENT)
                 date_int, = snomed.module_dependency_df.loc[idx, 'effectiveTime']
                 return datetime.date(
                     year=date_int // 10000,
@@ -185,10 +181,10 @@ class Ontology(nx.DiGraph):
                     day=date_int % 100,
                     )
             except KeyError:
-                _onto_logger.warning(f"Did not find module {US_MODULE} in Module Dependency. Defaulting to 1970-01-01")
+                _onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} in Module Dependency. Defaulting to 1970-01-01")
                 return datetime.date(1970, 1, 1)
 
-        snomed.version = {'SNOMED CT US': extract_date(US_MODULE)}
+        snomed.version = {'SNOMED CT US': extract_date(SNOMED_US_MODULE)}
 
         # Make sure we are dealing with a snapshot
         if snomed.concept_df.count()["id"] != snomed.concept_df.nunique()["id"]:
@@ -477,7 +473,7 @@ class Ontology(nx.DiGraph):
         ancestral_nodes = set()
 
         # Find all ancestors starting from the root node
-        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=ROOT, visited_nodes=set(),
+        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=SNOMED_ROOT, visited_nodes=set(),
                                          ancestors=ancestral_nodes)
 
         # Remove redundant ancestors

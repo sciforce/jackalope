@@ -6,7 +6,10 @@ import sys
 
 from core import ontology
 from core import vocab
-from core.logger import jacka_logger
+from utils.constants import JACKALOPE_HOST
+from utils.constants import JACKALOPE_VERSION
+from utils.constants import JACKALOPORT
+from utils.logger import jacka_logger
 from vocab_backend import csv_backend
 from vocab_backend import sql_backend
 
@@ -14,7 +17,7 @@ from datetime import datetime
 
 from core import expression_process
 from rest_server import request_model
-from core.hashing import COMPATIBILITY_VERSION
+from utils.constants import HASH_COMPATIBILITY_VERSION
 
 from flask import Flask
 from flask import jsonify
@@ -22,9 +25,6 @@ from flask import request
 
 from flask_pydantic import validate
 
-HOST = '127.0.0.1'
-PORT = 52252
-VERSION = '0.2-ALPHA'
 server_logger = jacka_logger.getChild('RESTServer')
 app = Flask('Jackalope')
 
@@ -55,12 +55,12 @@ class JackalopeREST:
         self.snomed_path = kwargs.get('snomed_path', None)
         self.vocabs_path = kwargs.get('vocabs_path', None)
         self.pickled_ont_path = kwargs.get('pickle_ont', None)
-        self.host = kwargs.get('host', HOST)
-        self.port = kwargs.get('port', PORT)
+        self.host = kwargs.get('host', JACKALOPE_HOST)
+        self.port = kwargs.get('port', JACKALOPORT)
         self.sql_connection_options = kwargs.get('connection_properties', None)
 
     def startup(self):
-        server_logger.info(f"Starting up Jackalope REST server version {VERSION}.")
+        server_logger.info(f"Starting up Jackalope REST server version {JACKALOPE_VERSION}.")
 
         self._load_ontology()
 
@@ -73,14 +73,14 @@ class JackalopeREST:
 
         self.voc.execute_inserts(self.voc.add_vocabulary(
                 vid='Jackalope',
-                version=VERSION,
+                version=JACKALOPE_VERSION,
                 reference='https://sciforce.solutions/industries/medtech',
                 concept_id=self.voc.next_jackalope_id()
                 ))
 
         sys.stdout.write("SERVER ONLINE")
         server_logger.info("Jackalope is running. Make sure to wear stovepipes.")
-        server_logger.info(f"API is available at http://{HOST}:{PORT}/jackalope/v1.0/")
+        server_logger.info(f"API is available at http://{JACKALOPE_HOST}:{JACKALOPORT}/jackalope/v1.0/")
 
     def compare_versions(self):
         server_logger.info("Checking SNOMED US versions in both databases.")
@@ -126,8 +126,8 @@ class JackalopeREST:
 def version():
     if request.method == 'GET':
         return request_model.Version(
-                app=VERSION,
-                hasher=str(COMPATIBILITY_VERSION),
+                app=JACKALOPE_VERSION,
+                hasher=str(HASH_COMPATIBILITY_VERSION),
                 snomed_omop=str(get_instance().voc_version),
                 snomed_rf2=str(get_instance().ont_version)
             )

@@ -1,8 +1,9 @@
 import requests
 import pathlib
 import pandas as pd
-import json
-from core.logger import jacka_logger
+from utils.logger import jacka_logger
+from utils.constants import JACKALOPE_HOST
+from utils.constants import JACKALOPORT
 
 _client_logger = jacka_logger.getChild('RESTClient')
 _client_logger.counter = 0
@@ -14,12 +15,7 @@ def _new_concept_logger():
     return logger
 
 
-with open('config.json') as f:
-    _DEFAULT_ARGS = json.load(f)
-    _host, _port = _DEFAULT_ARGS['host'], _DEFAULT_ARGS['port']
-
-
-def add_vocabulary(vid, version, reference, name, host=_host, port=_port):
+def add_vocabulary(vid, version, reference, name, host=JACKALOPE_HOST, port=JACKALOPORT):
     return requests.post(
             f'http://{host}:{port}/jackalope/v1.0/add/vocabulary',
             json={
@@ -38,8 +34,8 @@ def add_source_concept(
         domain_id,
         concept_class_id,
         synonyms,
-        host=_host,
-        port=_port
+        host=JACKALOPE_HOST,
+        port=JACKALOPORT
         ) -> int:
 
     response = requests.post(
@@ -59,8 +55,8 @@ def add_source_concept(
 def add_expression(
         post_coordination_expression,
         concept_id,
-        host=_host,
-        port=_port
+        host=JACKALOPE_HOST,
+        port=JACKALOPORT
         ) -> dict:
     response = requests.post(
             f'http://{host}:{port}/jackalope/v1.0/add/pce',
@@ -72,7 +68,7 @@ def add_expression(
     return response.json()
 
 
-def get_concept_info(concept_id, host=_host, port=_port) -> pd.Series:
+def get_concept_info(concept_id, host=JACKALOPE_HOST, port=JACKALOPORT) -> pd.Series:
     response = requests.get(
             f'http://{host}:{port}/jackalope/v1.0/get/concept_info',
             params={'concept_id': concept_id}
@@ -80,7 +76,7 @@ def get_concept_info(concept_id, host=_host, port=_port) -> pd.Series:
     return pd.Series(response.json()['concept_data'])
 
 
-def unmap_concept(concept_id, host=_host, port=_port) -> bool:
+def unmap_concept(concept_id, host=JACKALOPE_HOST, port=JACKALOPORT) -> bool:
     response = requests.delete(
             f'http://{host}:{port}/jackalope/v1.0/delete/mapping',
             params={
