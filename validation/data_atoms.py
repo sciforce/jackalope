@@ -15,16 +15,17 @@ validation_logger = ontology.onto_logger.getChild('Validation')
 Cardinality = tuple[int, int | None]
 
 
-# noinspection PyMethodParameters
 class SNOMEDConcept(pydantic.BaseModel):
     id: int
     ontology: ontology.Ontology
 
-    @pydantic.validator('id')
-    def check_in_ontology(cls, v, values):
-        if v not in values['ontology']:
-            raise ValueError(f'SCTID {v} does not represent an active concept')
-        return v
+    @pydantic.root_validator
+    @classmethod
+    def check_in_ontology(cls, values):
+        # Check if concept is a node in ontology object
+        if values['id'] not in values['ontology']:
+            raise ValueError(f"Concept {values['id']} is not a valid code in the ontology")
+        return values
 
     def get(self) -> int:
         return self.id
@@ -33,16 +34,17 @@ class SNOMEDConcept(pydantic.BaseModel):
         arbitrary_types_allowed = True
 
 
-# noinspection PyMethodParameters
 class ValidatedRelationship(pydantic.BaseModel):
     typeId: int
     destinationId: Optional[int]
     concreteValue: Optional[str | int | float | bool]
     parent_ontology: ontology.Ontology
 
-    @pydantic.validator('typeId')
-    def check_type_is_attribute(cls, v, values):
+    @pydantic.root_validator()
+    @classmethod
+    def check_type_is_attribute(cls, values):
         ont: ontology.Ontology = values['parent_ontology']
+        v: int = values['typeId']
         if ont.is_descendant(v, UNAPPROVED_ATTRIBUTE):
             if not ALLOW_UNAPPROVED:
                 raise ValueError(f"Use of unapproved attributes is forbidden: {v}")
@@ -50,13 +52,14 @@ class ValidatedRelationship(pydantic.BaseModel):
                 validation_logger.warning(f"Used an unapproved attribute: {v}")
         if not ont.is_descendant(v, CONCEPT_MODEL_ATTRIBUTE):
             raise ValueError("SCTID does not belongs to an attribute")
-        return v
+        return values
 
     def get(self) -> data_model.Relationship | data_model.ConcreteRelationship:
         if self.destinationId is not None:
             return data_model.Relationship(self.typeId, self.destinationId)
         if self.concreteValue is not None:
             return data_model.ConcreteRelationship(self.typeId, self.concreteValue)
+        raise ValueError("Relationship has no destination or concrete value")
 
     class Config:
         arbitrary_types_allowed = True

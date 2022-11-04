@@ -20,6 +20,8 @@ def _parse_cardinality(cardinality: str) -> validation.data_atoms.Cardinality:
         return 0, None
     elif cardinality == '1..*':
         return 1, None
+    elif cardinality == '0..0':
+        return 0, 0
     else:
         raise ValueError(f'Invalid cardinality: {cardinality}')
 
@@ -36,7 +38,7 @@ class MRCMValidator:
             if not ont.is_descendant(row['contentTypeId'], constants.ALL_PCE_CONTENT):
                 continue
 
-            rule = validation.data_atoms.data_atoms.DomainRule(
+            rule = validation.data_atoms.DomainRule(
                     id=row['id'],
                     attributeId=row['referencedComponentId'],
                     domainId=row['domainId'],

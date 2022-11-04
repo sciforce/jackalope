@@ -225,7 +225,6 @@ class Ontology(nx.DiGraph):
             # Classic relationships:
             for _, relationship in self.inferred_df[self.inferred_df["sourceId"] == cid].iterrows():
                 r = data_model.Relationship(
-                    # group=relationship['relationshipGroup'],
                     destinationId=relationship['destinationId'],
                     typeId=relationship['typeId']
                     )
@@ -239,7 +238,6 @@ class Ontology(nx.DiGraph):
             # Literal relationships:
             for _, relationship in self.concrete_df[self.concrete_df['sourceId'] == cid].iterrows():
                 r = data_model.ConcreteRelationship(
-                    # group=['relationshipGroup'],
                     typeId=relationship['typeId'],
                     concreteValue=float(relationship['value'][1:])
                     )

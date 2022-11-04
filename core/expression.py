@@ -326,9 +326,10 @@ class Expression:
         # Add -1 group for total count independent of groups
         out[-1] = dict()
         for i, group in enumerate(self.relationship_groups):
+            out[i] = dict()
             for rel in group.relationships:
-                out[i][rel.type_concept_id] = out.get(rel.type_concept_id, 0) + 1
-                out[-1][rel.type_concept_id] = out[-1].get(rel.type_concept_id, 0) + 1
+                out[i][rel.typeId] = out.get(rel.typeId, 0) + 1
+                out[-1][rel.typeId] = out[-1].get(rel.typeId, 0) + 1
 
         if use_ontology is not None:
             for group, cnts in out.items():
