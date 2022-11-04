@@ -11,6 +11,7 @@ from flask import jsonify
 from flask import request
 from flask_pydantic import validate
 
+import validation.mrcm
 from core import expression_process
 from core import ontology
 from core import vocab
@@ -191,6 +192,20 @@ def add_post_coordinated_expression():
         # Deserialize the expression
         pce_processor = expression_process.Processor()
         pce = pce_processor.process(data['post_coordinated_expression'])[0]
+
+        # Validate the expression
+        try:
+            get_instance().ont.validator.validate_expression(pce)
+        except validation.mrcm.SCTIDInvalid as e:
+            return request_model.ValidationErrorResponse(
+                    error=f"{e.sctid} is not a valid SCTID.",
+                    expression="data['post_coordinated_expression']",
+                ), 422
+        except validation.mrcm.MRCMValidationError as e:
+            return request_model.ValidationErrorResponse(
+                    error=e.message,
+                    expression=data['post_coordinated_expression'],
+                ), 422
 
         expression_insert = get_instance().voc.ingest_expression(
                 pce,

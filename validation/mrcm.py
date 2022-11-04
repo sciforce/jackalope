@@ -19,11 +19,13 @@ class SNOMEDExpressionsError(Exception):
 class SCTIDInvalid(SNOMEDExpressionsError):
     def __init__(self, sctid: int):
         super().__init__(f"Invalid SCTID: {sctid}")
+        self.sctid = sctid
 
 
 class MRCMValidationError(SNOMEDExpressionsError):
     def __init__(self, message: str, rule: DomainRule):
-        super().__init__(message)
+        super().__init__(message, rule)
+        self.message = message
         self.rule = rule
 
 

@@ -18,6 +18,7 @@ from utils.constants import SCT_MODEL_COMPONENT
 from utils.constants import SNOMED_ROOT
 from utils.constants import SNOMED_US_MODULE
 from utils.logger import jacka_logger
+from validation import mrcm
 
 onto_logger = jacka_logger.getChild('Ontology')
 
@@ -83,6 +84,10 @@ class Ontology(nx.DiGraph):
 
         # Create a cache for ancestorship lookups to improve performance
         self._lookup_cache: dict[tuple[int, int], data_model.HierarchicalMatch] = dict()
+
+        # Teach an MRCM evaluator to this ontology
+        self.validator = mrcm.MRCMValidator(self)
+        onto_logger.info(f"Ontology object initialized with {len(self)} concepts.")
 
     def is_descendant(self, concept_id: int, ancestor_id: int,
                       chain: Optional[list] = None) -> data_model.HierarchicalMatch:

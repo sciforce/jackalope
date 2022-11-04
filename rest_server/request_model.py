@@ -57,3 +57,9 @@ class BoolResponse(BaseModel):
 
 class VocabId(BaseModel):
     vocabulary_id: str
+
+
+class ValidationErrorResponse(BaseModel):
+    error: str
+    expression: str
+    rule: str
