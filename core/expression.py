@@ -317,3 +317,28 @@ class Expression:
         self.relationship_groups = [group.substitute_sctid(old_id, new_id)
                                     for group in self.relationship_groups]
         self._cf_cache = None
+
+    def get_attribute_counts(self, use_ontology: ontology.Ontology | None = None) -> dict[int, dict[int, int]]:
+        """Returns a dictionary of attribute type ids and their counts per group in the expression.
+        If "use_ontology" is not None, the counts are calculated with respect to subtype inheritance.
+        """
+        out = dict()
+        # Add -1 group for total count independent of groups
+        out[-1] = dict()
+        for i, group in enumerate(self.relationship_groups):
+            for rel in group.relationships:
+                out[i][rel.type_concept_id] = out.get(rel.type_concept_id, 0) + 1
+                out[-1][rel.type_concept_id] = out[-1].get(rel.type_concept_id, 0) + 1
+
+        if use_ontology is not None:
+            for group, cnts in out.items():
+                for attr, cnt in cnts.items():
+                    # Iterate over other attributes in the group. If any are descendants of the current attribute,
+                    # add their counts to the current attribute's count.
+                    for attr_2, cnt_2 in cnts.items():
+                        if attr_2 == attr:
+                            continue
+                        if use_ontology.is_descendant(attr_2, attr):
+                            cnt += cnt_2
+
+        return out
