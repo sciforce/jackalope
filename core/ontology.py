@@ -19,7 +19,7 @@ from utils.constants import SNOMED_ROOT
 from utils.constants import SNOMED_US_MODULE
 from utils.logger import jacka_logger
 
-_onto_logger = jacka_logger.getChild('Ontology')
+onto_logger = jacka_logger.getChild('Ontology')
 
 
 class AccidentalEquivalency(BaseException):
@@ -67,14 +67,14 @@ class Ontology(nx.DiGraph):
 
         with open(filepath, 'wb') as f:
 
-            _onto_logger.info(f"Dumping cache to {filepath}...")
+            onto_logger.info(f"Dumping cache to {filepath}...")
             pickle.dump(self, f)
 
     @classmethod
     def load(cls, filepath) -> Ontology:
         with open(filepath, 'rb') as f:
             loaded = pickle.load(f)
-            _onto_logger.info(f"Loaded {cls} object containing {len(loaded)} concept entries.")
+            onto_logger.info(f"Loaded {cls} object containing {len(loaded)} concept entries.")
 
             return loaded
 
@@ -126,15 +126,15 @@ class Ontology(nx.DiGraph):
         """Returns a new Ontology from the RF2 files"""
 
         # Find files of interest in the directory
-        _onto_logger.info(f"Loading the ontology from {rf2_path}")
+        onto_logger.info(f"Loading the ontology from {rf2_path}")
 
         def match_file(pattern: str, *parents: str) -> str:
             files = os.listdir(os.path.join(rf2_path, *parents))
-            _onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
+            onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
 
             for filename in files:
                 if pattern in filename:
-                    _onto_logger.info(f"Found {filename} in {parents[0]}!")
+                    onto_logger.info(f"Found {filename} in {parents[0]}!")
                     return os.path.join(rf2_path, *parents, filename)
 
             raise FileNotFoundError(f"No match found for pattern {pattern}")
@@ -157,7 +157,7 @@ class Ontology(nx.DiGraph):
         # Initialize the new Ontology
         snomed = Ontology()
 
-        _onto_logger.info("Loading content frames...")
+        onto_logger.info("Loading content frames...")
         snomed.concept_df = pd.read_csv(concept_file_path, delimiter='\t').query("active == 1")
         snomed.description_df = pd.read_csv(description_file_path, delimiter='\t').query("active == 1")
         # snomed.owl_expression_df = pd.read_csv(owl_expression_file_path, delimiter='\t').query("active == 1")
@@ -165,7 +165,7 @@ class Ontology(nx.DiGraph):
         snomed.inferred_df = pd.read_csv(inferred_relationship_file_path, delimiter='\t').query("active == 1")
         snomed.concrete_df = pd.read_csv(concrete_values_file_path, delimiter='\t').query("active == 1")
 
-        _onto_logger.info("Loading metadata frames...")
+        onto_logger.info("Loading metadata frames...")
         snomed.mrcm_range_df = pd.read_csv(mrcm_range_file_path, delimiter='\t').query("active == 1")
         snomed.mrcm_domain_df = pd.read_csv(mrcm_domain_file_path, delimiter='\t').query("active == 1")
         snomed.module_dependency_df = pd.read_csv(module_dependency_file_path, delimiter='\t').query("active == 1")
@@ -182,8 +182,8 @@ class Ontology(nx.DiGraph):
                     day=date_int % 100,
                     )
             except KeyError:
-                _onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} "
-                                     f"in Module Dependency. Defaulting to 1970-01-01")
+                onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} "
+                                    f"in Module Dependency. Defaulting to 1970-01-01")
                 return datetime.date(1970, 1, 1)
 
         snomed.version = {'SNOMED CT US': extract_date(SNOMED_US_MODULE)}
@@ -193,13 +193,13 @@ class Ontology(nx.DiGraph):
             raise ValueError('Non-unique concepts detected. Please use Snapshot instead of Full.')
 
         snomed.concept_count = len(snomed.concept_df)
-        _onto_logger.info(f"Found {snomed.concept_count} concepts.")
+        onto_logger.info(f"Found {snomed.concept_count} concepts.")
 
         return snomed
 
     def populate(self, dump_filename=None, isa_to_hierarchy: bool = True):
         """Populates the graph with concepts from the stored tables."""
-        _onto_logger.info("Popultaing the graph:")
+        onto_logger.info("Popultaing the graph:")
 
         for rownum, concept in self.concept_df.iterrows():
 
@@ -207,7 +207,7 @@ class Ontology(nx.DiGraph):
 
             # Counter:
             if rownum % 10000 == 0 or rownum == self.concept_count:  # type: ignore
-                _onto_logger.debug(f"On row {rownum} of {self.concept_count}...")
+                onto_logger.debug(f"On row {rownum} of {self.concept_count}...")
             # progress = rownum / self.concept_count
             # print(f"Done: {progress*100:.2f}% On row {rownum}/{self.concept_count}...\r\r")
 
@@ -217,7 +217,7 @@ class Ontology(nx.DiGraph):
             try:
                 fsn = names.query(f"typeId == {FSN}").iloc[0, 0]
             except IndexError:
-                _onto_logger.warning(f"WARNING: No FSN found for {cid}")
+                onto_logger.warning(f"WARNING: No FSN found for {cid}")
                 fsn = "No FSN found"
 
             # Get all inferred relations of the concept and process them into Relationship objects
@@ -266,7 +266,7 @@ class Ontology(nx.DiGraph):
 
             self.add_node(cid, **concept_properties)
 
-        _onto_logger.info(f"Nodes added!")
+        onto_logger.info(f"Nodes added!")
 
         # If cache filename is specified, dump self to file
         if dump_filename is not None:
