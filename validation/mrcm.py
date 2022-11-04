@@ -2,34 +2,16 @@
 from __future__ import annotations
 
 from core import ontology
-from validation.data_atoms import Cardinality
-from validation.data_atoms import DomainRule
 from core.expression import Expression
 from utils.constants import ALLOW_NONRECOMMENDED
 from utils import constants
+from utils import logger
+import validation.data_atoms
 
-_logger = ontology.onto_logger.getChild('Validation')
-
-
-# Specific expression errors
-class SNOMEDExpressionsError(Exception):
-    pass
+_logger = logger.jacka_logger.getChild('MRCMValidation')
 
 
-class SCTIDInvalid(SNOMEDExpressionsError):
-    def __init__(self, sctid: int):
-        super().__init__(f"Invalid SCTID: {sctid}")
-        self.sctid = sctid
-
-
-class MRCMValidationError(SNOMEDExpressionsError):
-    def __init__(self, message: str, rule: DomainRule):
-        super().__init__(message, rule)
-        self.message = message
-        self.rule = rule
-
-
-def _parse_cardinality(cardinality: str) -> Cardinality:
+def _parse_cardinality(cardinality: str) -> validation.data_atoms.Cardinality:
     if cardinality == '0..1':
         return 0, 1
     elif cardinality == '1..1':
@@ -45,7 +27,7 @@ def _parse_cardinality(cardinality: str) -> Cardinality:
 class MRCMValidator:
 
     def __init__(self, ont: ontology.Ontology) -> None:
-        self.domain_rules: list[DomainRule] = []
+        self.domain_rules: list[validation.data_atoms.DomainRule] = []
         self._snomed = ont
 
         for _, row in ont.mrcm_domain_df.iterrows():
@@ -54,7 +36,7 @@ class MRCMValidator:
             if not ont.is_descendant(row['contentTypeId'], constants.ALL_PCE_CONTENT):
                 continue
 
-            rule = DomainRule(
+            rule = validation.data_atoms.data_atoms.DomainRule(
                     id=row['id'],
                     attributeId=row['referencedComponentId'],
                     domainId=row['domainId'],
@@ -87,7 +69,7 @@ class MRCMValidator:
                                                              in attr_types[-1]):
                 err_msg = f'Obligatory attribute {rule.attributeId} is missing from expression {e}.'
                 if rule.mandatory or not ALLOW_NONRECOMMENDED:
-                    raise MRCMValidationError(err_msg, rule)
+                    raise validation.data_atoms.MRCMValidationError(err_msg, rule)
                 else:
                     _logger.warning(err_msg)
                     continue
@@ -104,7 +86,7 @@ class MRCMValidator:
                     err_msg = f'Attribute {attr} is not allowed in expression {e}. ' \
                               f'Choose another attribute or add the expression parents.'
                     if rule.mandatory or not ALLOW_NONRECOMMENDED:
-                        raise MRCMValidationError(err_msg, rule)
+                        raise validation.data_atoms.MRCMValidationError(err_msg, rule)
                     else:
                         _logger.warning(err_msg)
                         continue
@@ -115,7 +97,7 @@ class MRCMValidator:
                     err_msg = f'Attribute {attr} has {total_count} values, but should have between ' \
                               f'{rule.attribute_cardinality[0]} and {rule.attribute_cardinality[1] or "*"} values.'
                     if rule.mandatory or not ALLOW_NONRECOMMENDED:
-                        raise MRCMValidationError(err_msg, rule)
+                        raise validation.data_atoms.MRCMValidationError(err_msg, rule)
                     else:
                         _logger.warning(err_msg)
                         continue
@@ -136,7 +118,7 @@ class MRCMValidator:
                                   f'between {rule.attribute_in_group_cardinality[0]} and ' \
                                   f'{rule.attribute_in_group_cardinality[1] or "*"} values.'
                         if rule.mandatory or not ALLOW_NONRECOMMENDED:
-                            raise MRCMValidationError(err_msg, rule)
+                            raise validation.data_atoms.MRCMValidationError(err_msg, rule)
                         else:
                             _logger.warning(err_msg)
                             continue

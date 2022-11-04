@@ -1,5 +1,4 @@
 # Copyright 2022 Sciforce Ukraine. All rights reserved.
-import random
 from typing import Optional, Iterable
 
 import antlr4
@@ -8,7 +7,9 @@ import core.expression
 from antlr_generated.SNOMEDLexer import SNOMEDLexer
 from antlr_generated.SNOMEDListener import SNOMEDListener
 from antlr_generated.SNOMEDParser import SNOMEDParser
+from validation import data_atoms
 from core import data_model
+from core import ontology
 
 
 def _new_concept_id() -> Iterable[int]:
@@ -22,8 +23,9 @@ def _new_concept_id() -> Iterable[int]:
 # Construct the concept from nodes
 class Processor(SNOMEDListener):
 
-    def __init__(self) -> None:
+    def __init__(self, ont: ontology.Ontology) -> None:
         super().__init__()
+        self._parent_ont = ont
 
         # Context flags and stacks
         self._parent_flag: bool = False
@@ -105,17 +107,11 @@ class Processor(SNOMEDListener):
         self._awaiting_value = False
 
         # Create the relationship object
-        if self._concrete_relationship:
-            rel = data_model.ConcreteRelationship(
-                typeId=self._current_attribute,
-                concreteValue=self._current_value
-                )
-        else:
-            rel = data_model.Relationship(
-                typeId=self._current_attribute,
-                destinationId=self._current_value  # type: ignore
-                )
-        
+        kwargs = {'typeId': self._current_attribute,
+                  'concreteValue' if self._concrete_relationship else 'destinationId': self._current_value,
+                  'parent_ontology': self._parent_ont
+                  }
+        rel = data_atoms.ValidatedRelationship(**kwargs).get()
         self._attribute_list.append(rel)
         return super().exitAttributeValue(ctx)
 
@@ -150,7 +146,7 @@ class Processor(SNOMEDListener):
         return super().enterExpressionValue(ctx)
 
     def enterConceptId(self, ctx: SNOMEDParser.ConceptIdContext):
-        sctid = int(ctx.getText())
+        sctid = data_atoms.SNOMEDConcept(id=int(ctx.getText()), ontology=self._parent_ont).get()
         if self._parent_flag:
             self.expression_stack[-1].add_parent(sctid)
         elif self._awaiting_attribute:

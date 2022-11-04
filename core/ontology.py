@@ -42,6 +42,7 @@ class Ontology(nx.DiGraph):
     module_dependency_df: pd.DataFrame
     concept_count: int
     version: dict[str, datetime.date]
+    validator: mrcm.MRCMValidator
 
     def _drop_frames(self):
         """Frees memory by relinquishing pandas DataFrame objects"""
@@ -84,10 +85,6 @@ class Ontology(nx.DiGraph):
 
         # Create a cache for ancestorship lookups to improve performance
         self._lookup_cache: dict[tuple[int, int], data_model.HierarchicalMatch] = dict()
-
-        # Teach an MRCM evaluator to this ontology
-        self.validator = mrcm.MRCMValidator(self)
-        onto_logger.info(f"Ontology object initialized with {len(self)} concepts.")
 
     def is_descendant(self, concept_id: int, ancestor_id: int,
                       chain: Optional[list] = None) -> data_model.HierarchicalMatch:
@@ -204,17 +201,14 @@ class Ontology(nx.DiGraph):
 
     def populate(self, dump_filename=None, isa_to_hierarchy: bool = True):
         """Populates the graph with concepts from the stored tables."""
-        onto_logger.info("Popultaing the graph:")
+        onto_logger.info("Populating the graph:")
 
         for rownum, concept in self.concept_df.iterrows():
 
             cid = concept["id"]
-
             # Counter:
             if rownum % 10000 == 0 or rownum == self.concept_count:  # type: ignore
                 onto_logger.debug(f"On row {rownum} of {self.concept_count}...")
-            # progress = rownum / self.concept_count
-            # print(f"Done: {progress*100:.2f}% On row {rownum}/{self.concept_count}...\r\r")
 
             # Get all names of the concept, extract the FSN
             names = self.description_df[self.description_df["conceptId"] == cid][["term", "typeId"]]
@@ -272,6 +266,10 @@ class Ontology(nx.DiGraph):
             self.add_node(cid, **concept_properties)
 
         onto_logger.info(f"Nodes added!")
+
+        # Add MRCM constraints to the ontology
+        self.validator = mrcm.MRCMValidator(self)
+        onto_logger.info("MRCM constraints added!")
 
         # If cache filename is specified, dump self to file
         if dump_filename is not None:

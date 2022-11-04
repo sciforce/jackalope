@@ -7,7 +7,6 @@ from core import data_model
 from utils.constants import CONCEPT_MODEL_ATTRIBUTE
 from utils.constants import UNAPPROVED_ATTRIBUTE
 from utils.constants import ALLOW_UNAPPROVED
-from utils.constants import ALLOW_NONRECOMMENDED
 from typing import Optional
 
 validation_logger = ontology.onto_logger.getChild('Validation')
@@ -30,6 +29,9 @@ class SNOMEDConcept(pydantic.BaseModel):
     def get(self) -> int:
         return self.id
 
+    class Config:
+        arbitrary_types_allowed = True
+
 
 # noinspection PyMethodParameters
 class ValidatedRelationship(pydantic.BaseModel):
@@ -39,7 +41,7 @@ class ValidatedRelationship(pydantic.BaseModel):
     parent_ontology: ontology.Ontology
 
     @pydantic.validator('typeId')
-    def check_type_is_attribute(cls, v, values, **_):
+    def check_type_is_attribute(cls, v, values):
         ont: ontology.Ontology = values['parent_ontology']
         if ont.is_descendant(v, UNAPPROVED_ATTRIBUTE):
             if not ALLOW_UNAPPROVED:
@@ -47,7 +49,7 @@ class ValidatedRelationship(pydantic.BaseModel):
             else:
                 validation_logger.warning(f"Used an unapproved attribute: {v}")
         if not ont.is_descendant(v, CONCEPT_MODEL_ATTRIBUTE):
-            raise ValueError("SCTID ddoes not belongs to an attribute")
+            raise ValueError("SCTID does not belongs to an attribute")
         return v
 
     def get(self) -> data_model.Relationship | data_model.ConcreteRelationship:
@@ -55,6 +57,9 @@ class ValidatedRelationship(pydantic.BaseModel):
             return data_model.Relationship(self.typeId, self.destinationId)
         if self.concreteValue is not None:
             return data_model.ConcreteRelationship(self.typeId, self.concreteValue)
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @dataclass(frozen=True)
@@ -71,4 +76,23 @@ class DomainRule:
 @dataclass(frozen=True)
 class RangeRule:
     # This depends on a whole different syntax, so will not be implemented for now.
-    raise NotImplementedError
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Range rules are not implemented yet")
+
+
+# Specific expression errors
+class SNOMEDExpressionsError(Exception):
+    pass
+
+
+class SCTIDInvalid(SNOMEDExpressionsError):
+    def __init__(self, sctid: int):
+        super().__init__(f"Invalid SCTID: {sctid}")
+        self.sctid = sctid
+
+
+class MRCMValidationError(SNOMEDExpressionsError):
+    def __init__(self, message: str, rule: DomainRule):
+        super().__init__(message, rule)
+        self.message = message
+        self.rule = rule

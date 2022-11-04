@@ -11,6 +11,7 @@ from flask import jsonify
 from flask import request
 from flask_pydantic import validate
 
+import validation.data_atoms
 import validation.mrcm
 from core import expression_process
 from core import ontology
@@ -115,7 +116,7 @@ class JackalopeREST:
                 self.ont = ontology.Ontology.load(self.pickled_ont_path)
                 return
             except FileNotFoundError:
-                server_logger.warning("Specified Pickle file not found!")
+                server_logger.warning("Specified Pickle file not found! Attempting to load from SNOMED path.")
 
         server_logger.info("Loading SNOMED Ontology from source RF2 files.")
         self.ont = ontology.Ontology.build(self.snomed_path)
@@ -190,18 +191,18 @@ def add_post_coordinated_expression():
         pass
 
         # Deserialize the expression
-        pce_processor = expression_process.Processor()
+        pce_processor = expression_process.Processor(get_instance().ont)
         pce = pce_processor.process(data['post_coordinated_expression'])[0]
 
         # Validate the expression
         try:
             get_instance().ont.validator.validate_expression(pce)
-        except validation.mrcm.SCTIDInvalid as e:
+        except validation.data_atoms.SCTIDInvalid as e:
             return request_model.ValidationErrorResponse(
                     error=f"{e.sctid} is not a valid SCTID.",
                     expression="data['post_coordinated_expression']",
                 ), 422
-        except validation.mrcm.MRCMValidationError as e:
+        except validation.data_atoms.MRCMValidationError as e:
             return request_model.ValidationErrorResponse(
                     error=e.message,
                     expression=data['post_coordinated_expression'],
