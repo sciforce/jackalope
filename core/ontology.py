@@ -5,6 +5,7 @@ import os
 import pickle
 from typing import Iterable, Optional
 import datetime
+import functools
 
 import networkx as nx
 import pandas as pd
@@ -54,7 +55,7 @@ class Ontology(nx.DiGraph):
         del self.mrcm_domain_df
         del self.module_dependency_df
 
-    def dump(self, filepath, preserve_cache=False, drop_raw_frames=True):
+    def dump(self, filepath, drop_raw_frames=True):
 
         # Don't store raw dataframes (class attributes remain uninitialized)
         if drop_raw_frames is True:
@@ -62,10 +63,6 @@ class Ontology(nx.DiGraph):
 
         if not filepath.lower().endswith('.ont'):
             filepath += '.ont'
-
-        # Don't carry the cache over
-        if not preserve_cache:
-            self._lookup_cache = dict()
 
         with open(filepath, 'wb') as f:
 
@@ -80,48 +77,21 @@ class Ontology(nx.DiGraph):
 
             return loaded
 
-    def __init__(self, incoming_graph_data=None, **attr):
-        super().__init__(incoming_graph_data, **attr)
-
-        # Create a cache for ancestorship lookups to improve performance
-        self._lookup_cache: dict[tuple[int, int], data_model.HierarchicalMatch] = dict()
-
-    def is_descendant(self, concept_id: int, ancestor_id: int,
-                      chain: Optional[list] = None) -> data_model.HierarchicalMatch:
+    @functools.cache
+    def is_descendant(self, concept_id: int, ancestor_id: int) -> data_model.HierarchicalMatch:
         """Recursively look for a degree of relation between two concepts.
         Check is performed depth first, so the shortest path is not guaranteed"""
 
-        # Check if the input is already in cache:
-        try:
-            return self._lookup_cache[(concept_id, ancestor_id)]
-        except KeyError:
-            match_value = self._raw_is_descendant(concept_id, ancestor_id, chain)
-            self._lookup_cache[concept_id, ancestor_id] = match_value
-            return match_value
-
-    def _raw_is_descendant(self, concept_id: int, ancestor_id: int,
-                           chain: Optional[list] = None) -> data_model.HierarchicalMatch:
-        if chain is None:
-            chain = []
-
         if concept_id == ancestor_id:
-            return data_model.HierarchicalMatch(len(chain))
+            return data_model.HierarchicalMatch(0)
 
-        # Make sure the current concept is not in chain
-        try:
-            idx = chain.index(concept_id)
-            raise IndexError(f"Loop is closed whil looking for ancestors! Trace chain tail: {chain[idx:]}")
-        except ValueError:
-            chain.append(concept_id)
+        # Check if a path exists
+        if not nx.has_path(self, ancestor_id, concept_id):
+            return data_model.HierarchicalMatch(-1)
 
-        # Recursively check descendants
-        for predecessor in self.predecessors(concept_id):
-            p_matched = self.is_descendant(predecessor, ancestor_id, chain)
-            if p_matched:
-                return p_matched
-
-        # No match on descendants aborts the branch and returns no relation
-        return data_model.HierarchicalMatch(-1)
+        # Check if the concept is a descendant of the ancestor
+        path_len = len(next(nx.all_simple_paths(self, ancestor_id, concept_id)))
+        return data_model.HierarchicalMatch(path_len)
 
     @staticmethod
     def build(rf2_path: str) -> Ontology:
