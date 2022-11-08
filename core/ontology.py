@@ -250,6 +250,7 @@ class Ontology(nx.DiGraph):
     def is_primitive(self, concept_id: int):
         return not self.nodes[concept_id]['definitionStatus']
 
+    @functools.lru_cache(maxsize=10_000)
     def primitive_parents(self, concept_id: int) -> Iterable[int]:
 
         # Primitive concepts serve as their own PPP
@@ -296,8 +297,8 @@ class Ontology(nx.DiGraph):
         new_children = list(filter(lambda x: not is_redundant(x), concept_ids))
         return new_children
 
-    def validate_ancestorship(self, expression: core.expression.Expression,
-                              concept_id: int) -> data_model.HierarchicalMatch:
+    def _validate_ancestorship(self, expression: core.expression.Expression,
+                               concept_id: int) -> data_model.HierarchicalMatch:
         """Expression is considered a descendant of a given concept if:
             - All ungroupped attributes in the concept have descendants among any attributes in the expression
             - All concept groups are ancestors of groups in the expression
@@ -420,7 +421,7 @@ class Ontology(nx.DiGraph):
 
         # If the node validates (is clean ancestor of the expression), continue to children;
         # otherwise, write the last reached node
-        matches = self.validate_ancestorship(normal_form, node)
+        matches = self._validate_ancestorship(normal_form, node)
         if matches.mapped and normal_form.definition_status:
             raise AccidentalEquivalency(node)
 
