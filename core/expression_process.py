@@ -21,7 +21,24 @@ def _new_concept_id() -> Iterable[int]:
 
 # Specific processing errors
 class SNOMEDExpressionsError(Exception):
-    pass
+    def __init__(self, message: str, line: int | None, column: int | None, **kwargs):
+        super().__init__(message)
+        self.line = line
+        self.column = column
+        self.details = kwargs
+
+
+# Create error listener for ANTLR parser
+class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        raise SNOMEDExpressionsError(
+                message=f"Syntax error at line {line}, column {column}: {msg}",
+                line=line,
+                column=column,
+                recognizer=recognizer,
+                offendingSymbol=offendingSymbol,
+                e=e,
+                )
 
 
 # Construct the concept from nodes
@@ -39,6 +56,9 @@ class Processor(SNOMEDListener):
         self.concrete_relationship: bool = False
         self.set_counter_stack: list[int] = []
         self.expect_numeric_value: bool = False
+
+        # Initialize error listener that will always raise an exception
+        self.error_listener = ErrorListener()
 
         # Expression stack for complex expressions with subexpressions
         self.expression_stack = []
@@ -169,6 +189,8 @@ class Processor(SNOMEDListener):
         
         def parse(expr: str):
             lexer = SNOMEDLexer(antlr4.InputStream(expr))
+            # Add error listener that will raise an exception on error
+            lexer.addErrorListener(self.error_listener)
             stream = antlr4.CommonTokenStream(lexer)
             parser = SNOMEDParser(stream)
             return parser.expression()
