@@ -16,7 +16,7 @@ def _main():
     # If filename is provided, start the server & client
     if len(sys.argv) > 1:
         server = subprocess.Popen(
-                ['python3', 'rest_server/server.py'],
+                ['python3', 'rest_server/server.py', '--not-stateless'],
                 stdout=subprocess.PIPE,
                 cwd=pathlib.Path().absolute())
         while True:

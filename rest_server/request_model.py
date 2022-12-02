@@ -63,3 +63,7 @@ class ValidationErrorResponse(BaseModel):
     error: str
     expression: str
     rule: str
+
+
+class OMOPTableInserts(BaseModel):
+    inserts: dict[str, list[dict[str, str | int | float | datetime.date | None]]]

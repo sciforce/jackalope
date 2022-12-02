@@ -11,7 +11,7 @@ import pathlib
 import networkx as nx
 import pandas as pd
 
-import core.expression
+from core import expression
 from core import data_model
 from utils.constants import DEFINED
 from utils.constants import FSN
@@ -20,7 +20,7 @@ from utils.constants import SCT_MODEL_COMPONENT
 from utils.constants import SNOMED_ROOT
 from utils.constants import SNOMED_US_MODULE
 from utils.logger import jacka_logger
-from validation import mrcm
+import validation.mrcm
 
 onto_logger = jacka_logger.getChild('Ontology')
 
@@ -44,7 +44,7 @@ class Ontology(nx.DiGraph):
     module_dependency_df: pd.DataFrame
     concept_count: int
     version: dict[str, datetime.date]
-    validator: mrcm.MRCMValidator
+    validator: validation.mrcm.MRCMValidator
 
     def _drop_frames(self):
         """Frees memory by relinquishing pandas DataFrame objects"""
@@ -237,7 +237,7 @@ class Ontology(nx.DiGraph):
         onto_logger.info(f"Nodes added!")
 
         # Add MRCM constraints to the ontology
-        self.validator = mrcm.MRCMValidator(self)
+        self.validator = validation.mrcm.MRCMValidator(self)
         onto_logger.info("MRCM constraints added!")
 
         # If cache filename is specified, dump self to file
@@ -248,7 +248,7 @@ class Ontology(nx.DiGraph):
         """Assigns the inferred_relationships for all concepts and builds hierarchy from axioms"""
         raise NotImplementedError
 
-    def is_primitive(self, concept_id: int):
+    def is_primitive(self, concept_id: int) -> bool:
         return not self.nodes[concept_id]['definitionStatus']
 
     @functools.lru_cache(maxsize=10_000)
@@ -298,7 +298,7 @@ class Ontology(nx.DiGraph):
         new_children = set(filter(lambda x: not is_redundant(x), concept_ids))
         return new_children
 
-    def _validate_ancestorship(self, expression: core.expression.Expression,
+    def _validate_ancestorship(self, expr: expression.Expression,
                                concept_id: int) -> data_model.HierarchicalMatch:
         """Expression is considered a descendant of a given concept if:
             - All ungroupped attributes in the concept have descendants among any attributes in the expression
@@ -306,7 +306,7 @@ class Ontology(nx.DiGraph):
         """
 
         # If the concept is a parent of one of the stated parents:
-        for parent in expression.parent_concepts:
+        for parent in expr.parent_concepts:
             matched = self.is_descendant(parent, concept_id)
             if matched:
                 return matched + 1
@@ -317,7 +317,7 @@ class Ontology(nx.DiGraph):
 
         # Check if all the concepts primitive parents are ancestors of at least one expression primitive parent:
         for c_parent in self.primitive_parents(concept_id):
-            has_ancestor = any(self.is_descendant(e_parent, c_parent) for e_parent in expression.parent_concepts)
+            has_ancestor = any(self.is_descendant(e_parent, c_parent) for e_parent in expr.parent_concepts)
             if not has_ancestor:
                 return data_model.HierarchicalMatch(-1)
 
@@ -330,11 +330,11 @@ class Ontology(nx.DiGraph):
         hierarchical_distance = 0
         ungroupped_attributes = rel_groups[0].relationships
         unmatched_concept_attributes = set(ungroupped_attributes)
-        unmatched_expression_attributes = set(expression.relationship_groups[0].relationships)
+        unmatched_expression_attributes = set(expr.relationship_groups[0].relationships)
 
         # Traverse Expression attributes:
         all_attrs = []
-        for group in expression.relationship_groups:
+        for group in expr.relationship_groups:
             all_attrs.extend(group.relationships)
 
         for c_rel in ungroupped_attributes:
@@ -365,7 +365,7 @@ class Ontology(nx.DiGraph):
 
         # Traverse Expression groups:
         for c_grp in groups:
-            for e_grp in expression.relationship_groups:  # This does include group 0
+            for e_grp in expr.relationship_groups:  # This does include group 0
                 match = e_grp.descends_from(c_grp,
                                             self,
                                             addl_atrs=ungroupped_attributes,
@@ -399,14 +399,14 @@ class Ontology(nx.DiGraph):
             return data_model.HierarchicalMatch(-1)
         else:
             # Unmatched groups & attributes add points of hierarchical distance
-            if len(expression.relationship_groups) >= 2:
-                hierarchical_distance += len(expression.relationship_groups) - len(matched_expression_groups)
+            if len(expr.relationship_groups) >= 2:
+                hierarchical_distance += len(expr.relationship_groups) - len(matched_expression_groups)
             hierarchical_distance += len(unmatched_expression_attributes)
             return data_model.HierarchicalMatch(hierarchical_distance)
 
     def _check_concept_ancestorship(
             self,
-            normal_form: core.expression.Expression,
+            normal_form: expression.Expression,
             node: int,
             visited_nodes: set[int],
             ancestors: set[int],
@@ -441,16 +441,19 @@ class Ontology(nx.DiGraph):
             # Add previous node as ancestor:
             ancestors.add(breadcrumb[-1])
 
-    def expression_hierarchy(self, expression: core.expression.Expression) -> list[int]:
+    def expression_hierarchy(self, expr: expression.Expression) -> list[int]:
         """Returns the position in hierarchy of the given expression as a list of immediate parents"""
         # Despite our concepts being usually Fully defined, we don't want to build descendants for them (yet)
         ancestral_nodes = set()
 
         # Find all ancestors starting from the root node
-        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=SNOMED_ROOT,
+        self._check_concept_ancestorship(normal_form=expr.normal_form(self), node=SNOMED_ROOT,
                                          visited_nodes=set(), ancestors=ancestral_nodes)
 
         # Remove redundant ancestors
         clean_list = list(self.remove_redundant_parents(ancestral_nodes))
 
         return clean_list
+
+    def get_relationship_groups(self, concept_id: int) -> list[data_model.RelationshipGroup]:
+        return self.nodes[concept_id]['relationships']

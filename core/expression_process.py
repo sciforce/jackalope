@@ -4,11 +4,11 @@ from typing import Optional, Iterable
 
 import antlr4
 
-import core.expression
 from antlr_generated.SNOMEDLexer import SNOMEDLexer
 from antlr_generated.SNOMEDListener import SNOMEDListener
 from antlr_generated.SNOMEDParser import SNOMEDParser
 from core import data_model
+import core.expression
 
 
 def _new_concept_id() -> Iterable[int]:

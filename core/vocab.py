@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 import core.expression
+from core import data_model
 from core import ontology
 from utils.constants import ENGLISH
 from utils.constants import EXPRESSION_LANGUAGE
@@ -53,13 +54,17 @@ class OmopVocabulary(abc.ABC):
             concept_class_id: str,
             synonyms: Optional[Iterable[str]] = None,
             language_id: int = ENGLISH,
+            generate_id: bool = True,
             ) -> VocabularyInsert:
         # Assert domain_id correctness:
         assert domain_id in VALID_DOMAINS
         synonyms = synonyms or []
 
         # Generate new concept_id in manual space:
-        concept_id = self.next_manual_id()
+        if generate_id:
+            concept_id = self.next_manual_id()
+        else:
+            concept_id = 0
 
         inserts = dict()
         # Append:
@@ -94,10 +99,14 @@ class OmopVocabulary(abc.ABC):
             reference: str,
             concept_id: Optional[int] = None,
             name: Optional[str] = None,
+            generate_id: bool = True,
             ) -> VocabularyInsert:
 
         if concept_id is None:
-            concept_id = self.next_manual_id()
+            if generate_id:
+                concept_id = self.next_manual_id()
+            else:
+                concept_id = 0
 
         inserts = {
             'concept': [{
@@ -126,11 +135,12 @@ class OmopVocabulary(abc.ABC):
     def ingest_expression(
             self,
             input_expression: core.expression.Expression,
-            ont: ontology.Ontology,
+            ont: data_model.OntologyInterface,
             source_id: int = None,
             given_name: Optional[str] = None,
             vocabulary_id: str = 'Jackalope',
-            report_parents: bool = True
+            report_parents: bool = True,
+            generate_ids: bool = True,
             ) -> VocabularyInsert:
         """Prepares SNOMED expression to be ingested by writing DELTA files on disc
         @param input_expression: data_model.Expression object to be evaluated
@@ -139,6 +149,7 @@ class OmopVocabulary(abc.ABC):
         @param given_name: Optional custom name for the new synthetic conceept
         @param vocabulary_id: Custom vocabulary_id to be assigned. Must be already present in VOCABULARY table
         @param report_parents: Flag whether to log found parents to the concole.
+        @param generate_ids: Flag whether to generate new concept_ids for the new concepts
         """
 
         inserts = dict()
@@ -154,7 +165,10 @@ class OmopVocabulary(abc.ABC):
         # Process the expression, finding its parents and hash-fingerprinted CONCEPT_CODE
         try:
             expression_parents = ont.expression_hierarchy(expression)
-            expression_id: int = self.next_jackalope_id()
+            if generate_ids:
+                expression_id: int = self.next_jackalope_id()
+            else:
+                expression_id: int = 0
             expression_fingerprint = expression.hash_concept_code(ont)
         except ontology.AccidentalEquivalency as e:
             # Return a mapping instead

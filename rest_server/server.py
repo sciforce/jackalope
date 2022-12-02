@@ -50,14 +50,15 @@ class JackalopeREST:
             return cls.instance
 
     def _init(self, **kwargs):
-        self.rebuild_omop = kwargs.get('rebuild_omop', True)
-        self.backend = kwargs.get('backend', 'sql')
-        self.snomed_path = kwargs.get('snomed_path', None)
-        self.vocabs_path = kwargs.get('vocabs_path', None)
-        self.pickled_ont_path = kwargs.get('pickle_ont', None)
-        self.host = kwargs.get('host', JACKALOPE_HOST)
-        self.port = kwargs.get('port', JACKALOPORT)
-        self.sql_connection_options = kwargs.get('connection_properties', None)
+        self.rebuild_omop: bool = kwargs.get('rebuild_omop', True)
+        self.backend: str = kwargs.get('backend', 'sql')
+        self.snomed_path: str = kwargs.get('snomed_path', None)
+        self.vocabs_path: str = kwargs.get('vocabs_path', None)
+        self.pickled_ont_path: str = kwargs.get('pickle_ont', None)
+        self.host: str = kwargs.get('host', JACKALOPE_HOST)
+        self.port: int = kwargs.get('port', JACKALOPORT)
+        self.sql_connection_options: str = kwargs.get('connection_properties', None)
+        self.stateless: bool = kwargs.get('stateless', False)
 
     def startup(self):
         server_logger.info(f"Starting up Jackalope REST server version {JACKALOPE_VERSION}.")
@@ -158,9 +159,15 @@ def add_vocab():
                 name=data['vocabulary_name'],
                 reference=data['vocabulary_reference'],
                 version=data['vocabulary_version'],
+                generate_id=not _get_instance().stateless,
             )
-        _get_instance().voc.execute_inserts(vocab_inserts)
-        return jsonify({})
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=vocab_inserts
+                )
+        else:
+            _get_instance().voc.execute_inserts(vocab_inserts)
+            return jsonify({})
 
 
 @app.route('/jackalope/v1.0/add/source_concept', methods=['POST'])
@@ -175,10 +182,15 @@ def add_source_concept():
                 concept_class_id=data['concept_class_id'],
                 domain_id=data['domain_id'],
                 synonyms=data.get('synonyms', None),
+                generate_id=not _get_instance().stateless
             )
-        _get_instance().voc.execute_inserts(concept_insert)
-
-        return request_model.ConceptId(concept_id=concept_insert['concept'][0]['concept_id'])
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=concept_insert
+                )
+        else:
+            _get_instance().voc.execute_inserts(concept_insert)
+            return request_model.ConceptId(concept_id=concept_insert['concept'][0]['concept_id'])
 
 
 @app.route('/jackalope/v1.0/add/pce', methods=['POST'])
@@ -200,8 +212,15 @@ def add_post_coordinated_expression():
                 pce,
                 _get_instance().ont,
                 source_id=data['source_id'],
-                given_name=data.get('given_name', None)
+                given_name=data.get('given_name', None),
+                generate_ids=not _get_instance().stateless
                 )
+
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=expression_insert
+                )
+
         _get_instance().voc.execute_inserts(expression_insert)
 
         response = {
@@ -230,6 +249,10 @@ def add_post_coordinated_expression():
 @validate(query=request_model.GetConcept)
 def unmap_concept():
     if request.method == 'DELETE':
+        # If server is stateless, return an error
+        if _get_instance().stateless:
+            return jsonify({'error': 'Server is stateless!'}), 400
+
         concept_id = request.args['concept_id']
         changes = _get_instance().voc.unmap(concept_id)
         return request_model.BoolResponse(changes_made=changes)
@@ -239,6 +262,10 @@ def unmap_concept():
 @validate(query=request_model.VocabId)
 def delete_vocabulary():
     if request.method == 'DELETE':
+        # If server is stateless, return an error
+        if _get_instance().stateless:
+            return jsonify({'error': 'Server is stateless!'}), 400
+
         vid = request.args['vocabulary_id']
         _get_instance().voc.drop_vocabulary(vid)
         return jsonify({})
@@ -258,6 +285,10 @@ def start_server(**kwargs):
 def main():
     with open('config.json') as f:
         DEFAULT_ARGS = json.load(f)
+
+    # Read if "--not-stateless" is passed as command line argument
+    if len(sys.argv) > 1 and sys.argv[1] == '--not-stateless':
+        DEFAULT_ARGS['stateless'] = False
 
     start_server(**DEFAULT_ARGS)
 
