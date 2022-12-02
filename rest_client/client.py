@@ -10,14 +10,25 @@ _client_logger = jacka_logger.getChild('RESTClient')
 _client_logger.counter = 0
 
 
+class RequestError(Exception):
+    def __init__(self, code: int, server_message: str | None = None):
+        self.code = code
+        self.message = server_message or f"Request failed with code {code}"
+
+
+def _test_200_ok(response: requests.Response) -> None:
+    if response.status_code != 200:
+        raise RequestError(response.status_code, response.json().get('error', None))
+
+
 def _new_concept_logger():
     logger = _client_logger.getChild(str(_client_logger.counter))
     _client_logger.counter += 1
     return logger
 
 
-def add_vocabulary(vid, version, reference, name, host=JACKALOPE_HOST, port=JACKALOPORT):
-    return requests.post(
+def add_vocabulary(vid, version, reference, name, host=JACKALOPE_HOST, port=JACKALOPORT) -> None:
+    response = requests.post(
             f'http://{host}:{port}/jackalope/v1.0/add/vocabulary',
             json={
                 "vocabulary_id": vid,
@@ -25,7 +36,8 @@ def add_vocabulary(vid, version, reference, name, host=JACKALOPE_HOST, port=JACK
                 "vocabulary_reference": reference,
                 "vocabulary_name": name,
                 }
-            )
+        )
+    _test_200_ok(response)
 
 
 def add_source_concept(
@@ -50,6 +62,7 @@ def add_source_concept(
                 "synonyms": synonyms,
                 }
             )
+    _test_200_ok(response)
     return response.json()['concept_id']
 
 
@@ -66,6 +79,7 @@ def add_expression(
                 "source_id": concept_id,
                 }
             )
+    _test_200_ok(response)
     return response.json()
 
 
@@ -74,6 +88,7 @@ def get_concept_info(concept_id, host=JACKALOPE_HOST, port=JACKALOPORT) -> pd.Se
             f'http://{host}:{port}/jackalope/v1.0/get/concept_info',
             params={'concept_id': concept_id}
             )
+    _test_200_ok(response)
     return pd.Series(response.json()['concept_data'])
 
 
@@ -84,6 +99,7 @@ def unmap_concept(concept_id, host=JACKALOPE_HOST, port=JACKALOPORT) -> bool:
                 "concept_id": concept_id,
                 }
             )
+    _test_200_ok(response)
     return response.json()['changes_made']
 
 
@@ -98,7 +114,8 @@ def main(filename=pathlib.Path().absolute() / 'use_cases_icd.csv'):
     _client_logger.info('OK.')
 
     examples = pd.read_csv(filename)
-    for _, row in examples.iterrows():
+
+    def _process_row(row: pd.Series):
         concept_logger = _new_concept_logger()
         concept_logger.debug('Assigned new logger')
         concept_logger.info(f"Processing {row['concept_code']} {row['concept_name']}")
@@ -149,6 +166,12 @@ def main(filename=pathlib.Path().absolute() / 'use_cases_icd.csv'):
                                     f"{parent['concept_name']} "
                                     f"{parent['vocabulary_id']}")
 
+    for _, row_ in examples.iterrows():
+        try:
+            _process_row(row_)
+        except RequestError as e:
+            _client_logger.error(f"Request error: {e.code} {e.message}."
+                                 f"Skipping {row_['concept_code']} {row_['concept_name']}")
     _client_logger.info("Done!")
 
 

@@ -27,6 +27,13 @@ class HierarchyMatch(unittest.TestCase):
         test_match_original += 1
         self.assertIsNot(test_match_copy, test_match_original)
 
+    def test_add(self):
+        test_match_original = data_model.HierarchicalMatch(1)
+        test_match_copy = test_match_original + 1
+        self.assertEqual(test_match_copy.distance, 2)
+        # Assert immutability
+        self.assertIsNot(test_match_copy, test_match_original)
+
 
 if __name__ == '__main__':
     unittest.main()
