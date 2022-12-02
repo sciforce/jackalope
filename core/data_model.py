@@ -49,6 +49,12 @@ class HierarchicalMatch:
     def __iadd__(self, other) -> HierarchicalMatch:
         return HierarchicalMatch(self.distance + other)
 
+    def __add__(self, other) -> HierarchicalMatch:
+        return HierarchicalMatch(self.distance + other)
+
+    def __int__(self):
+        return self.distance
+
 
 @dataclass(frozen=True, order=True)
 class Relationship:

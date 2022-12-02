@@ -454,8 +454,15 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
                                         field >= utils.constants.JACKALOPE_SPACE[0],
                                         field < utils.constants.JACKALOPE_SPACE[1]),
                                 field > utils.constants.MANUAL_SPACE)))
-                        deleted = session.execute(delete_rows_q)
-                        deleted_rows += deleted.rowcount
+                        try:
+                            deleted = session.execute(delete_rows_q)
+                            deleted_rows += deleted.rowcount
+                        except sa.exc.IntegrityError:
+                            self.logger.error(f"Could not delete rows from {cls.__tablename__} due to foreign key "
+                                              f"constraints. Consider setting all foreign keys deferrable.")
+
+                            # We still raise, because inserts will break if we don't clean up properly.
+                            raise
                     self.logger.debug(f"Deleted {deleted_rows} from {cls.__tablename__}...")
 
     def _last_omop_code(self) -> int:

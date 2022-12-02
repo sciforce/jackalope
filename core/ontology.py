@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import os
 import pickle
-from typing import Iterable, Optional
+from typing import Iterable
 import datetime
 import functools
+import pathlib
 
 import networkx as nx
 import pandas as pd
@@ -55,7 +56,7 @@ class Ontology(nx.DiGraph):
         del self.mrcm_domain_df
         del self.module_dependency_df
 
-    def dump(self, filepath, drop_raw_frames=True):
+    def dump(self, filepath: str | pathlib.Path, drop_raw_frames: bool = True):
 
         # Don't store raw dataframes (class attributes remain uninitialized)
         if drop_raw_frames is True:
@@ -70,7 +71,7 @@ class Ontology(nx.DiGraph):
             pickle.dump(self, f)
 
     @classmethod
-    def load(cls, filepath) -> Ontology:
+    def load(cls, filepath: str | pathlib.Path) -> Ontology:
         with open(filepath, 'rb') as f:
             loaded = pickle.load(f)
             onto_logger.info(f"Loaded {cls} object containing {len(loaded)} concept entries.")
@@ -80,8 +81,10 @@ class Ontology(nx.DiGraph):
     @functools.cache
     def is_descendant(self, concept_id: int, ancestor_id: int) -> data_model.HierarchicalMatch:
         """Recursively look for a degree of relation between two concepts.
-        Check is performed depth first, so the shortest path is not guaranteed"""
+        Check is performed depth first, so the shortest path is not guaranteed. However, immediate ancestors are
+        checked explicitly, so the result is always correct."""
 
+        # Check equivalence
         if concept_id == ancestor_id:
             return data_model.HierarchicalMatch(0)
 
@@ -89,19 +92,23 @@ class Ontology(nx.DiGraph):
         if not nx.has_path(self, ancestor_id, concept_id):
             return data_model.HierarchicalMatch(-1)
 
+        # Check immediate ancestorship
+        if concept_id in self.successors(ancestor_id):
+            return data_model.HierarchicalMatch(1)
+
         # Check if the concept is a descendant of the ancestor
         path_len = len(next(nx.all_simple_paths(self, ancestor_id, concept_id)))
         return data_model.HierarchicalMatch(path_len)
 
     @staticmethod
-    def build(rf2_path: str) -> Ontology:
+    def build(rf2_path: str | pathlib.Path) -> Ontology:
         """Returns a new Ontology from the RF2 files"""
 
         # Find files of interest in the directory
         onto_logger.info(f"Loading the ontology from {rf2_path}")
 
         def match_file(pattern: str, *parents: str) -> str:
-            files = os.listdir(os.path.join(rf2_path, *parents))
+            files = pathlib.Path(rf2_path).glob(os.path.join(*parents, pattern))
             onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
 
             for filename in files:
@@ -114,17 +121,13 @@ class Ontology(nx.DiGraph):
         # Terminology files
         concept_file_path = match_file("Concept", "Terminology")
         description_file_path = match_file("Description", "Terminology")
-        inferred_relationship_file_path = match_file("_Relationship_",
-                                                     "Terminology")
+        inferred_relationship_file_path = match_file("_Relationship_", "Terminology")
         concrete_values_file_path = match_file("ConcreteValues", "Terminology")
 
         # Metadata files
-        module_dependency_file_path = match_file("ModuleDependency",
-                                                 "Refset", "Metadata")
-        mrcm_domain_file_path = match_file("MRCMAttributeDomain",
-                                           "Refset", "Metadata")
-        mrcm_range_file_path = match_file("MRCMAttributeRange",
-                                          "Refset", "Metadata")
+        module_dependency_file_path = match_file("ModuleDependency", "Refset", "Metadata")
+        mrcm_domain_file_path = match_file("MRCMAttributeDomain", "Refset", "Metadata")
+        mrcm_range_file_path = match_file("MRCMAttributeRange", "Refset", "Metadata")
 
         # Initialize the new Ontology
         snomed = Ontology()
@@ -132,8 +135,6 @@ class Ontology(nx.DiGraph):
         onto_logger.info("Loading content frames...")
         snomed.concept_df = pd.read_csv(concept_file_path, delimiter='\t').query("active == 1")
         snomed.description_df = pd.read_csv(description_file_path, delimiter='\t').query("active == 1")
-        # snomed.owl_expression_df = pd.read_csv(owl_expression_file_path, delimiter='\t').query("active == 1")
-        # Disable for now: we do not intend to reclassify existing hierarchy
         snomed.inferred_df = pd.read_csv(inferred_relationship_file_path, delimiter='\t').query("active == 1")
         snomed.concrete_df = pd.read_csv(concrete_values_file_path, delimiter='\t').query("active == 1")
 
@@ -169,7 +170,7 @@ class Ontology(nx.DiGraph):
 
         return snomed
 
-    def populate(self, dump_filename=None, isa_to_hierarchy: bool = True):
+    def populate(self, dump_filename=None, isa_to_hierarchy: bool = True) -> None:
         """Populates the graph with concepts from the stored tables."""
         onto_logger.info("Populating the graph:")
 
@@ -251,11 +252,11 @@ class Ontology(nx.DiGraph):
         return not self.nodes[concept_id]['definitionStatus']
 
     @functools.lru_cache(maxsize=10_000)
-    def primitive_parents(self, concept_id: int) -> Iterable[int]:
+    def primitive_parents(self, concept_id: int) -> set[int]:
 
         # Primitive concepts serve as their own PPP
         if self.is_primitive(concept_id):
-            return [concept_id]
+            return {concept_id}
 
         proximal_primitive_parents = set()
         for node in self.predecessors(concept_id):
@@ -267,7 +268,7 @@ class Ontology(nx.DiGraph):
 
         return proximal_primitive_parents
 
-    def remove_redundant_parents(self, concept_ids: Iterable[int]) -> list[int]:
+    def remove_redundant_parents(self, concept_ids: Iterable[int]) -> set[int]:
 
         def is_redundant(parent) -> bool:
             for other_parent in concept_ids:
@@ -279,10 +280,10 @@ class Ontology(nx.DiGraph):
 
             return False
 
-        new_parents = list(filter(lambda x: not is_redundant(x), concept_ids))
+        new_parents = set(filter(lambda x: not is_redundant(x), concept_ids))
         return new_parents
 
-    def remove_redundant_children(self, concept_ids: Iterable[int]) -> list[int]:
+    def remove_redundant_children(self, concept_ids: Iterable[int]) -> set[int]:
 
         def is_redundant(child) -> bool:
             for other_child in concept_ids:
@@ -294,7 +295,7 @@ class Ontology(nx.DiGraph):
 
             return False
 
-        new_children = list(filter(lambda x: not is_redundant(x), concept_ids))
+        new_children = set(filter(lambda x: not is_redundant(x), concept_ids))
         return new_children
 
     def _validate_ancestorship(self, expression: core.expression.Expression,
@@ -308,8 +309,7 @@ class Ontology(nx.DiGraph):
         for parent in expression.parent_concepts:
             matched = self.is_descendant(parent, concept_id)
             if matched:
-                matched += 1
-                return matched
+                return matched + 1
 
         # Primitive concepts do not get descendants assignment,
         if self.is_primitive(concept_id):
@@ -356,7 +356,7 @@ class Ontology(nx.DiGraph):
 
         # Work with groupped relationships, if there are any:
         try:
-            groups = list(rel_groups[1:])
+            groups: list[data_model.RelationshipGroup] = list(rel_groups[1:])
         except IndexError:
             return data_model.HierarchicalMatch(hierarchical_distance)
 
@@ -410,7 +410,7 @@ class Ontology(nx.DiGraph):
             node: int,
             visited_nodes: set[int],
             ancestors: set[int],
-            breadcrumb: Optional[list] = None) -> None:
+            breadcrumb: None | list[int] = None) -> None:
         if breadcrumb is None:
             breadcrumb = list()
 
