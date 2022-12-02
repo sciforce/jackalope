@@ -1,3 +1,4 @@
+// Copyright 2022 Sciforce Ukraine. All rights reserved.
 grammar SNOMED;
 
 fragment T               : [Tt];

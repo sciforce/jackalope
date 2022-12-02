@@ -1,8 +1,9 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 import cProfile
 import pathlib
 import pstats
 import sys
-from core.logger import jacka_logger
+from utils.logger import jacka_logger
 
 PROFILING = False
 
@@ -74,7 +75,7 @@ def _main_fallback():
         print(40 * '-')
         print(f"Expression: {example['post_coordination_expression']}")
 
-        processor = expression_process.Processor()
+        processor = expression_process.Processor(ont)
         expr = processor.process(example["post_coordination_expression"])[0]
 
         # Add the source concept

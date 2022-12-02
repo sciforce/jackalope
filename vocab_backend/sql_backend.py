@@ -13,6 +13,8 @@ import core.vocab
 
 import pandas as pd
 
+import utils.constants
+
 _LOCALHOST = '127.0.0.1'
 
 _OMOP_metadata = sa.MetaData()
@@ -54,7 +56,7 @@ class ForwardedEngine:
         self._db_address = db_address, db_port
         self._resolve_metadata = resolve_metadata
 
-        if ssh_password is None:
+        if ssh_password is None and ssh_address is not None:
             ssh_password = _get_ssh_pass()
 
         if ssh_address is not None:
@@ -449,9 +451,9 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
                         field = getattr(cls, key)
                         delete_rows_q = (sa.delete(cls).where(sa.or_(
                                 sa.and_(
-                                        field >= core.vocab.JACKALOPE_SPACE[0],
-                                        field < core.vocab.JACKALOPE_SPACE[1]),
-                                field > core.vocab.MANUAL_SPACE)))
+                                        field >= utils.constants.JACKALOPE_SPACE[0],
+                                        field < utils.constants.JACKALOPE_SPACE[1]),
+                                field > utils.constants.MANUAL_SPACE)))
                         deleted = session.execute(delete_rows_q)
                         deleted_rows += deleted.rowcount
                     self.logger.debug(f"Deleted {deleted_rows} from {cls.__tablename__}...")

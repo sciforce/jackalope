@@ -1,18 +1,27 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from __future__ import annotations
 
 import os
 import pickle
 from typing import Iterable, Optional
 import datetime
+import functools
 
 import networkx as nx
 import pandas as pd
 
 import core.expression
 from core import data_model
-from core.logger import jacka_logger
+from utils.constants import DEFINED
+from utils.constants import FSN
+from utils.constants import ISA
+from utils.constants import SCT_MODEL_COMPONENT
+from utils.constants import SNOMED_ROOT
+from utils.constants import SNOMED_US_MODULE
+from utils.logger import jacka_logger
+from validation import mrcm
 
-_onto_logger = jacka_logger.getChild('Ontology')
+onto_logger = jacka_logger.getChild('Ontology')
 
 
 class AccidentalEquivalency(BaseException):
@@ -22,16 +31,6 @@ class AccidentalEquivalency(BaseException):
 
     def __repr__(self):
         return f"Mapping to {self.sctid} must be done instead."
-
-
-# SNOMED constants
-ROOT = 138875005
-ROOT_MODULE = 900000000000012004
-MODEL_COMPONENT = 900000000000012004
-US_MODULE = 731000124108
-DEFINED = 900000000000073002
-FSN = 900000000000003001
-ISA = 116680003
 
 
 class Ontology(nx.DiGraph):
@@ -44,6 +43,7 @@ class Ontology(nx.DiGraph):
     module_dependency_df: pd.DataFrame
     concept_count: int
     version: dict[str, datetime.date]
+    validator: mrcm.MRCMValidator
 
     def _drop_frames(self):
         """Frees memory by relinquishing pandas DataFrame objects"""
@@ -55,7 +55,7 @@ class Ontology(nx.DiGraph):
         del self.mrcm_domain_df
         del self.module_dependency_df
 
-    def dump(self, filepath, preserve_cache=False, drop_raw_frames=True):
+    def dump(self, filepath, drop_raw_frames=True):
 
         # Don't store raw dataframes (class attributes remain uninitialized)
         if drop_raw_frames is True:
@@ -64,80 +64,49 @@ class Ontology(nx.DiGraph):
         if not filepath.lower().endswith('.ont'):
             filepath += '.ont'
 
-        # Don't carry the cache over
-        if not preserve_cache:
-            self._lookup_cache = dict()
-
         with open(filepath, 'wb') as f:
 
-            _onto_logger.info(f"Dumping cache to {filepath}...")
+            onto_logger.info(f"Dumping cache to {filepath}...")
             pickle.dump(self, f)
 
     @classmethod
     def load(cls, filepath) -> Ontology:
         with open(filepath, 'rb') as f:
             loaded = pickle.load(f)
-            _onto_logger.info(f"Loaded {cls} object containing {len(loaded)} concept entries.")
+            onto_logger.info(f"Loaded {cls} object containing {len(loaded)} concept entries.")
 
             return loaded
 
-    def __init__(self, incoming_graph_data=None, **attr):
-        super().__init__(incoming_graph_data, **attr)
-
-        # Create a cache for ancestorship lookups to improve performance
-        self._lookup_cache: dict[tuple[int, int], data_model.HierarchicalMatch] = dict()
-
-    def is_descendant(self, concept_id: int, ancestor_id: int,
-                      chain: Optional[list] = None) -> data_model.HierarchicalMatch:
+    @functools.cache
+    def is_descendant(self, concept_id: int, ancestor_id: int) -> data_model.HierarchicalMatch:
         """Recursively look for a degree of relation between two concepts.
         Check is performed depth first, so the shortest path is not guaranteed"""
 
-        # Check if the input is already in cache:
-        try:
-            return self._lookup_cache[(concept_id, ancestor_id)]
-        except KeyError:
-            match_value = self._raw_is_descendant(concept_id, ancestor_id, chain)
-            self._lookup_cache[concept_id, ancestor_id] = match_value
-            return match_value
-
-    def _raw_is_descendant(self, concept_id: int, ancestor_id: int,
-                           chain: Optional[list] = None) -> data_model.HierarchicalMatch:
-        if chain is None:
-            chain = []
-
         if concept_id == ancestor_id:
-            return data_model.HierarchicalMatch(len(chain))
+            return data_model.HierarchicalMatch(0)
 
-        # Make sure the current concept is not in chain
-        try:
-            idx = chain.index(concept_id)
-            raise IndexError(f"Loop is closed whil looking for ancestors! Trace chain tail: {chain[idx:]}")
-        except ValueError:
-            chain.append(concept_id)
+        # Check if a path exists
+        if not nx.has_path(self, ancestor_id, concept_id):
+            return data_model.HierarchicalMatch(-1)
 
-        # Recursively check descendants
-        for predecessor in self.predecessors(concept_id):
-            p_matched = self.is_descendant(predecessor, ancestor_id, chain)
-            if p_matched:
-                return p_matched
-
-        # No match on descendants aborts the branch and returns no relation
-        return data_model.HierarchicalMatch(-1)
+        # Check if the concept is a descendant of the ancestor
+        path_len = len(next(nx.all_simple_paths(self, ancestor_id, concept_id)))
+        return data_model.HierarchicalMatch(path_len)
 
     @staticmethod
     def build(rf2_path: str) -> Ontology:
         """Returns a new Ontology from the RF2 files"""
 
         # Find files of interest in the directory
-        _onto_logger.info(f"Loading the ontology from {rf2_path}")
+        onto_logger.info(f"Loading the ontology from {rf2_path}")
 
         def match_file(pattern: str, *parents: str) -> str:
             files = os.listdir(os.path.join(rf2_path, *parents))
-            _onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
+            onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
 
             for filename in files:
                 if pattern in filename:
-                    _onto_logger.info(f"Found {filename} in {parents[0]}!")
+                    onto_logger.info(f"Found {filename} in {parents[0]}!")
                     return os.path.join(rf2_path, *parents, filename)
 
             raise FileNotFoundError(f"No match found for pattern {pattern}")
@@ -160,7 +129,7 @@ class Ontology(nx.DiGraph):
         # Initialize the new Ontology
         snomed = Ontology()
 
-        _onto_logger.info("Loading content frames...")
+        onto_logger.info("Loading content frames...")
         snomed.concept_df = pd.read_csv(concept_file_path, delimiter='\t').query("active == 1")
         snomed.description_df = pd.read_csv(description_file_path, delimiter='\t').query("active == 1")
         # snomed.owl_expression_df = pd.read_csv(owl_expression_file_path, delimiter='\t').query("active == 1")
@@ -168,7 +137,7 @@ class Ontology(nx.DiGraph):
         snomed.inferred_df = pd.read_csv(inferred_relationship_file_path, delimiter='\t').query("active == 1")
         snomed.concrete_df = pd.read_csv(concrete_values_file_path, delimiter='\t').query("active == 1")
 
-        _onto_logger.info("Loading metadata frames...")
+        onto_logger.info("Loading metadata frames...")
         snomed.mrcm_range_df = pd.read_csv(mrcm_range_file_path, delimiter='\t').query("active == 1")
         snomed.mrcm_domain_df = pd.read_csv(mrcm_domain_file_path, delimiter='\t').query("active == 1")
         snomed.module_dependency_df = pd.read_csv(module_dependency_file_path, delimiter='\t').query("active == 1")
@@ -177,7 +146,7 @@ class Ontology(nx.DiGraph):
         def extract_date(module: int) -> datetime.date:
             try:
                 idx = (snomed.module_dependency_df['moduleId'] == module) & \
-                      (snomed.module_dependency_df['referencedComponentId'] == MODEL_COMPONENT)
+                      (snomed.module_dependency_df['referencedComponentId'] == SCT_MODEL_COMPONENT)
                 date_int, = snomed.module_dependency_df.loc[idx, 'effectiveTime']
                 return datetime.date(
                     year=date_int // 10000,
@@ -185,33 +154,31 @@ class Ontology(nx.DiGraph):
                     day=date_int % 100,
                     )
             except KeyError:
-                _onto_logger.warning(f"Did not find module {US_MODULE} in Module Dependency. Defaulting to 1970-01-01")
+                onto_logger.warning(f"Did not find module {SNOMED_US_MODULE} "
+                                    f"in Module Dependency. Defaulting to 1970-01-01")
                 return datetime.date(1970, 1, 1)
 
-        snomed.version = {'SNOMED CT US': extract_date(US_MODULE)}
+        snomed.version = {'SNOMED CT US': extract_date(SNOMED_US_MODULE)}
 
         # Make sure we are dealing with a snapshot
         if snomed.concept_df.count()["id"] != snomed.concept_df.nunique()["id"]:
             raise ValueError('Non-unique concepts detected. Please use Snapshot instead of Full.')
 
         snomed.concept_count = len(snomed.concept_df)
-        _onto_logger.info(f"Found {snomed.concept_count} concepts.")
+        onto_logger.info(f"Found {snomed.concept_count} concepts.")
 
         return snomed
 
     def populate(self, dump_filename=None, isa_to_hierarchy: bool = True):
         """Populates the graph with concepts from the stored tables."""
-        _onto_logger.info("Popultaing the graph:")
+        onto_logger.info("Populating the graph:")
 
         for rownum, concept in self.concept_df.iterrows():
 
             cid = concept["id"]
-
             # Counter:
             if rownum % 10000 == 0 or rownum == self.concept_count:  # type: ignore
-                _onto_logger.debug(f"On row {rownum} of {self.concept_count}...")
-            # progress = rownum / self.concept_count
-            # print(f"Done: {progress*100:.2f}% On row {rownum}/{self.concept_count}...\r\r")
+                onto_logger.debug(f"On row {rownum} of {self.concept_count}...")
 
             # Get all names of the concept, extract the FSN
             names = self.description_df[self.description_df["conceptId"] == cid][["term", "typeId"]]
@@ -219,7 +186,7 @@ class Ontology(nx.DiGraph):
             try:
                 fsn = names.query(f"typeId == {FSN}").iloc[0, 0]
             except IndexError:
-                _onto_logger.warning(f"WARNING: No FSN found for {cid}")
+                onto_logger.warning(f"WARNING: No FSN found for {cid}")
                 fsn = "No FSN found"
 
             # Get all inferred relations of the concept and process them into Relationship objects
@@ -228,7 +195,6 @@ class Ontology(nx.DiGraph):
             # Classic relationships:
             for _, relationship in self.inferred_df[self.inferred_df["sourceId"] == cid].iterrows():
                 r = data_model.Relationship(
-                    # group=relationship['relationshipGroup'],
                     destinationId=relationship['destinationId'],
                     typeId=relationship['typeId']
                     )
@@ -242,7 +208,6 @@ class Ontology(nx.DiGraph):
             # Literal relationships:
             for _, relationship in self.concrete_df[self.concrete_df['sourceId'] == cid].iterrows():
                 r = data_model.ConcreteRelationship(
-                    # group=['relationshipGroup'],
                     typeId=relationship['typeId'],
                     concreteValue=float(relationship['value'][1:])
                     )
@@ -268,7 +233,11 @@ class Ontology(nx.DiGraph):
 
             self.add_node(cid, **concept_properties)
 
-        _onto_logger.info(f"Nodes added!")
+        onto_logger.info(f"Nodes added!")
+
+        # Add MRCM constraints to the ontology
+        self.validator = mrcm.MRCMValidator(self)
+        onto_logger.info("MRCM constraints added!")
 
         # If cache filename is specified, dump self to file
         if dump_filename is not None:
@@ -281,6 +250,7 @@ class Ontology(nx.DiGraph):
     def is_primitive(self, concept_id: int):
         return not self.nodes[concept_id]['definitionStatus']
 
+    @functools.lru_cache(maxsize=10_000)
     def primitive_parents(self, concept_id: int) -> Iterable[int]:
 
         # Primitive concepts serve as their own PPP
@@ -327,8 +297,8 @@ class Ontology(nx.DiGraph):
         new_children = list(filter(lambda x: not is_redundant(x), concept_ids))
         return new_children
 
-    def validate_ancestorship(self, expression: core.expression.Expression,
-                              concept_id: int) -> data_model.HierarchicalMatch:
+    def _validate_ancestorship(self, expression: core.expression.Expression,
+                               concept_id: int) -> data_model.HierarchicalMatch:
         """Expression is considered a descendant of a given concept if:
             - All ungroupped attributes in the concept have descendants among any attributes in the expression
             - All concept groups are ancestors of groups in the expression
@@ -451,7 +421,7 @@ class Ontology(nx.DiGraph):
 
         # If the node validates (is clean ancestor of the expression), continue to children;
         # otherwise, write the last reached node
-        matches = self.validate_ancestorship(normal_form, node)
+        matches = self._validate_ancestorship(normal_form, node)
         if matches.mapped and normal_form.definition_status:
             raise AccidentalEquivalency(node)
 
@@ -477,8 +447,8 @@ class Ontology(nx.DiGraph):
         ancestral_nodes = set()
 
         # Find all ancestors starting from the root node
-        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=ROOT, visited_nodes=set(),
-                                         ancestors=ancestral_nodes)
+        self._check_concept_ancestorship(normal_form=expression.normal_form(self), node=SNOMED_ROOT,
+                                         visited_nodes=set(), ancestors=ancestral_nodes)
 
         # Remove redundant ancestors
         clean_list = list(self.remove_redundant_parents(ancestral_nodes))

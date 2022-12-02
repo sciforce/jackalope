@@ -1,4 +1,4 @@
-from core import hashing
+from utils import hashing
 
 
 def test_hashing_code():

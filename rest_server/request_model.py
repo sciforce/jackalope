@@ -1,3 +1,4 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from typing import Optional
 from pydantic import BaseModel
 import datetime
@@ -56,3 +57,9 @@ class BoolResponse(BaseModel):
 
 class VocabId(BaseModel):
     vocabulary_id: str
+
+
+class ValidationErrorResponse(BaseModel):
+    error: str
+    expression: str
+    rule: str

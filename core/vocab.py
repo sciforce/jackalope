@@ -1,24 +1,20 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from __future__ import annotations
 
 import pandas as pd
 
 import core.expression
 from core import ontology
-from core.logger import jacka_logger
+from utils.constants import ENGLISH
+from utils.constants import EXPRESSION_LANGUAGE
+from utils.constants import JACKALOPE_SPACE
+from utils.constants import MANUAL_SPACE
+from utils.constants import VALID_DOMAINS
+from utils.logger import jacka_logger
 from typing import Iterable, Optional, Any
 import abc
 import copy
 import datetime
-
-ENGLISH = 4180186
-EXPRESSION_LANGUAGE = 45768546  # Placeholder, needs an OMOP Extension concept
-
-JACKALOPE_SPACE = 1_000_000_000, 2_000_000_000
-MANUAL_SPACE = 2_000_000_000
-ID_RANGE = 9
-VALID_DOMAINS = ['Procedure', 'Measurement', 'Condition', 'Context-dependent',
-                 'Observation', 'Metadata']
-# SNOMED should not be used for Drug, even if attributes are good
 
 VocabularyInsert = dict[str, list[dict[str, str | float | int | None]]]
 

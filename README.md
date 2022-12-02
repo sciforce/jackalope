@@ -208,7 +208,7 @@ Evaluates a post-coordinated expressions, and adds relevant changes affecting th
 ```json
 {
     "source_id": 2123456789,
-    "pce": "74580009: {405816004 =  25723000, 260686004 = 129404003}"
+    "post_coordinated_expression": "74580009: {405816004 =  25723000, 260686004 = 129404003}"
 }
 ```
 

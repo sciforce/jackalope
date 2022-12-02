@@ -1,30 +1,30 @@
+# Copyright 2022 Sciforce Ukraine. All rights reserved.
 from __future__ import annotations
 
 import datetime
 import json
 import sys
-
-from core import ontology
-from core import vocab
-from core.logger import jacka_logger
-from vocab_backend import csv_backend
-from vocab_backend import sql_backend
-
 from datetime import datetime
-
-from core import expression_process
-from rest_server import request_model
-from core.hashing import COMPATIBILITY_VERSION
 
 from flask import Flask
 from flask import jsonify
 from flask import request
-
 from flask_pydantic import validate
 
-HOST = '127.0.0.1'
-PORT = 52252
-VERSION = '0.2-ALPHA'
+import validation.data_atoms
+import validation.mrcm
+from core import expression_process
+from core import ontology
+from core import vocab
+from rest_server import request_model
+from utils.constants import HASH_COMPATIBILITY_VERSION
+from utils.constants import JACKALOPE_HOST
+from utils.constants import JACKALOPE_VERSION
+from utils.constants import JACKALOPORT
+from utils.logger import jacka_logger
+from vocab_backend import csv_backend
+from vocab_backend import sql_backend
+
 server_logger = jacka_logger.getChild('RESTServer')
 app = Flask('Jackalope')
 
@@ -55,12 +55,12 @@ class JackalopeREST:
         self.snomed_path = kwargs.get('snomed_path', None)
         self.vocabs_path = kwargs.get('vocabs_path', None)
         self.pickled_ont_path = kwargs.get('pickle_ont', None)
-        self.host = kwargs.get('host', HOST)
-        self.port = kwargs.get('port', PORT)
+        self.host = kwargs.get('host', JACKALOPE_HOST)
+        self.port = kwargs.get('port', JACKALOPORT)
         self.sql_connection_options = kwargs.get('connection_properties', None)
 
     def startup(self):
-        server_logger.info(f"Starting up Jackalope REST server version {VERSION}.")
+        server_logger.info(f"Starting up Jackalope REST server version {JACKALOPE_VERSION}.")
 
         self._load_ontology()
 
@@ -73,14 +73,14 @@ class JackalopeREST:
 
         self.voc.execute_inserts(self.voc.add_vocabulary(
                 vid='Jackalope',
-                version=VERSION,
+                version=JACKALOPE_VERSION,
                 reference='https://sciforce.solutions/industries/medtech',
                 concept_id=self.voc.next_jackalope_id()
                 ))
 
         sys.stdout.write("SERVER ONLINE")
         server_logger.info("Jackalope is running. Make sure to wear stovepipes.")
-        server_logger.info(f"API is available at http://{HOST}:{PORT}/jackalope/v1.0/")
+        server_logger.info(f"API is available at http://{JACKALOPE_HOST}:{JACKALOPORT}/jackalope/v1.0/")
 
     def compare_versions(self):
         server_logger.info("Checking SNOMED US versions in both databases.")
@@ -112,11 +112,15 @@ class JackalopeREST:
         if self.pickled_ont_path is not None:
             server_logger.debug("Pickle file provided. Loading from pickle. Ignoring SNOMED path.")
             server_logger.info("Unpickling saved SNOMED Ontology.")
-            self.ont = ontology.Ontology.load(self.pickled_ont_path)
-        else:
-            server_logger.info("Loading SNOMED Ontology from source RF2 files.")
-            self.ont = ontology.Ontology.build(self.snomed_path)
-            self.ont.populate(dump_filename="SNOMED")
+            try:
+                self.ont = ontology.Ontology.load(self.pickled_ont_path)
+                return
+            except FileNotFoundError:
+                server_logger.warning("Specified Pickle file not found! Attempting to load from SNOMED path.")
+
+        server_logger.info("Loading SNOMED Ontology from source RF2 files.")
+        self.ont = ontology.Ontology.build(self.snomed_path)
+        self.ont.populate(dump_filename="SNOMED")
 
         server_logger.info("Done.")
 
@@ -126,8 +130,8 @@ class JackalopeREST:
 def version():
     if request.method == 'GET':
         return request_model.Version(
-                app=VERSION,
-                hasher=str(COMPATIBILITY_VERSION),
+                app=JACKALOPE_VERSION,
+                hasher=str(HASH_COMPATIBILITY_VERSION),
                 snomed_omop=str(get_instance().voc_version),
                 snomed_rf2=str(get_instance().ont_version)
             )
@@ -187,8 +191,22 @@ def add_post_coordinated_expression():
         pass
 
         # Deserialize the expression
-        pce_processor = expression_process.Processor()
+        pce_processor = expression_process.Processor(get_instance().ont)
         pce = pce_processor.process(data['post_coordinated_expression'])[0]
+
+        # Validate the expression
+        try:
+            get_instance().ont.validator.validate_expression(pce)
+        except validation.data_atoms.SCTIDInvalid as e:
+            return request_model.ValidationErrorResponse(
+                    error=f"{e.sctid} is not a valid SCTID.",
+                    expression="data['post_coordinated_expression']",
+                ), 422
+        except validation.data_atoms.MRCMValidationError as e:
+            return request_model.ValidationErrorResponse(
+                    error=e.message,
+                    expression=data['post_coordinated_expression'],
+                ), 422
 
         expression_insert = get_instance().voc.ingest_expression(
                 pce,
