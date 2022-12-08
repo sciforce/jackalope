@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from getpass import getpass
-from typing import Optional, Type, TypeVar, Any
+from typing import Type, TypeVar, Any
 
 import sqlalchemy as sa
 import sshtunnel
@@ -45,10 +45,10 @@ class ForwardedEngine:
             db_address: str,
             db_port: int,
             db_name: str,
-            ssh_address: Optional[str] = None,
-            ssh_port: Optional[int] = None,
-            ssh_username: Optional[str] = None,
-            ssh_password: Optional[str] = None,
+            ssh_address: str | None = None,
+            ssh_port: int | None = None,
+            ssh_username: str | None = None,
+            ssh_password: str | None = None,
             metadata: sa.MetaData = _OMOP_metadata,
             resolve_metadata: bool = False,
             permanent_connection: bool = False,
@@ -476,7 +476,7 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
         with self.start_session() as session:
             return session.execute(query).fetchone()[0]
 
-    def _last_id_in_range(self, range_start: Optional[int] = 0, range_end: Optional[int] = None) -> int:
+    def _last_id_in_range(self, range_start: int = 0, range_end: int | None = None) -> int:
         query = sa.select(Concept.concept_id).order_by(Concept.concept_id).limit(1)
         if range_end is not None:
             query = query.where(Concept.concept_id.between(range_start, range_end - 1))

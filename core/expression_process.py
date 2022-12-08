@@ -1,6 +1,6 @@
 # Copyright 2022 Sciforce Ukraine. All rights reserved.
 import random
-from typing import Optional, Iterable
+from typing import Iterable
 
 import antlr4
 
@@ -29,6 +29,8 @@ class SNOMEDExpressionsError(Exception):
 
 
 # Create error listener for ANTLR parser
+# Disable PEP for Java-like entity names
+# noinspection PyPep8Naming
 class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         raise SNOMEDExpressionsError(
@@ -65,7 +67,7 @@ class Processor(SNOMEDListener):
         self.expression_store = []
 
         # Custom concept identfier to use inside the complex expression
-        self.custom_concept_id: Optional[int] = None
+        self.custom_concept_id: int | None = None
 
     def enterSubExpression(self, ctx: SNOMEDParser.SubExpressionContext):
         e = core.expression.Expression()

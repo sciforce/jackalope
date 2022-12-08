@@ -12,7 +12,7 @@ from utils.constants import JACKALOPE_SPACE
 from utils.constants import MANUAL_SPACE
 from utils.constants import VALID_DOMAINS
 from utils.logger import jacka_logger
-from typing import Iterable, Optional, Any
+from typing import Iterable, Any
 import abc
 import copy
 import datetime
@@ -52,7 +52,7 @@ class OmopVocabulary(abc.ABC):
             concept_name: str,
             domain_id: str,
             concept_class_id: str,
-            synonyms: Optional[Iterable[str]] = None,
+            synonyms: Iterable[str] | None = None,
             language_id: int = ENGLISH,
             generate_id: bool = True,
             ) -> VocabularyInsert:
@@ -97,8 +97,8 @@ class OmopVocabulary(abc.ABC):
             vid: str,
             version: str,
             reference: str,
-            concept_id: Optional[int] = None,
-            name: Optional[str] = None,
+            concept_id: int | None = None,
+            name: str | None = None,
             generate_id: bool = True,
             ) -> VocabularyInsert:
 
@@ -137,7 +137,7 @@ class OmopVocabulary(abc.ABC):
             input_expression: core.expression.Expression,
             ont: data_model.OntologyInterface,
             source_id: int = None,
-            given_name: Optional[str] = None,
+            given_name: str | None = None,
             vocabulary_id: str = 'Jackalope',
             report_parents: bool = True,
             generate_ids: bool = True,
@@ -412,7 +412,7 @@ class OmopVocabulary(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def _last_id_in_range(self, range_start: Optional[int] = 0, range_end: Optional[int] = None) -> int:
+    def _last_id_in_range(self, range_start: int = 0, range_end: int | None = None) -> int:
         """Get the last occupied CONCEPT_ID in range. Defaults to range start if no concepts exist in the range."""
         ...
 
