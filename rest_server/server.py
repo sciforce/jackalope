@@ -202,11 +202,10 @@ def add_post_coordinated_expression():
         # Deserialize the expression
         try:
             pce_processor = expression_process.Processor()
+            pce = pce_processor.process(data['post_coordinated_expression'])[0]
         except expression_process.SNOMEDExpressionsError as e:
             # Return a 400 error if the expression is invalid
             return jsonify({'error': str(e)}), 400
-
-        pce = pce_processor.process(data['post_coordinated_expression'])[0]
 
         expression_insert = _get_instance().voc.ingest_expression(
                 pce,

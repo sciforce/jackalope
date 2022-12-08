@@ -69,26 +69,26 @@ class OmopVocabulary(abc.ABC):
         inserts = dict()
         # Append:
         inserts['concept'] = [{
-            'concept_id': concept_id,
-            'concept_name': concept_name,
-            'domain_id': domain_id,
-            'vocabulary_id': vocabulary_id,
-            'concept_class_id': concept_class_id,
-            'concept_code': concept_code,
-            'standard_concept': None,
-            'valid_start_date': '19700101',
-            'valid_end_date': '20991231',
-            'invalid_reason': None
-            }]
+                'concept_id': concept_id,
+                'concept_name': concept_name,
+                'domain_id': domain_id,
+                'vocabulary_id': vocabulary_id,
+                'concept_class_id': concept_class_id,
+                'concept_code': concept_code,
+                'standard_concept': None,
+                'valid_start_date': '19700101',
+                'valid_end_date': '20991231',
+                'invalid_reason': None
+                }]
 
         inserts['concept_synonym'] = []
         for synonym in synonyms:
             # noinspection PyTypeChecker
             inserts['concept_synonym'].append({
-                'concept_id': concept_id,
-                'concept_synonym_name': synonym,
-                'language_concept_id': language_id
-                })
+                    'concept_id': concept_id,
+                    'concept_synonym_name': synonym,
+                    'language_concept_id': language_id
+                    })
 
         return inserts
 
@@ -109,27 +109,27 @@ class OmopVocabulary(abc.ABC):
                 concept_id = 0
 
         inserts = {
-            'concept': [{
-                'concept_id': concept_id,
-                'concept_name': vid,
-                'domain_id': 'Metadata',
-                'vocabulary_id': 'Vocabulary',
-                'concept_class_id': 'Vocabulary',
-                'concept_code': 'OMOP generated',
-                'standard_concept': None,
-                'valid_start_date': '19700101',
-                'valid_end_date': '20991231',
-                'invalid_reason': None,
-                }],
+                'concept': [{
+                        'concept_id': concept_id,
+                        'concept_name': vid,
+                        'domain_id': 'Metadata',
+                        'vocabulary_id': 'Vocabulary',
+                        'concept_class_id': 'Vocabulary',
+                        'concept_code': 'OMOP generated',
+                        'standard_concept': None,
+                        'valid_start_date': '19700101',
+                        'valid_end_date': '20991231',
+                        'invalid_reason': None,
+                        }],
 
-            'vocabulary': [{
-                'vocabulary_id': vid,
-                'vocabulary_name': name or vid,
-                'vocabulary_version': version,
-                'vocabulary_reference': reference,
-                'vocabulary_concept_id': concept_id,
-                }]
-            }
+                'vocabulary': [{
+                        'vocabulary_id': vid,
+                        'vocabulary_name': name or vid,
+                        'vocabulary_version': version,
+                        'vocabulary_reference': reference,
+                        'vocabulary_concept_id': concept_id,
+                        }]
+                }
         return inserts
 
     def ingest_expression(
@@ -152,7 +152,7 @@ class OmopVocabulary(abc.ABC):
         @param generate_ids: Flag whether to generate new concept_ids for the new concepts
         """
 
-        inserts = dict()
+        inserts: VocabularyInsert = dict()
 
         if given_name is None and source_id is not None:
             given_name = self._get_concept_attribute(source_id, 'concept_name')
@@ -193,9 +193,9 @@ class OmopVocabulary(abc.ABC):
 
         # Get a slice of CONCEPT containing parent data
         query = {
-            'vocabulary_id': ['SNOMED'],
-            'concept_code': [str(p) for p in expression_parents]
-            }
+                'vocabulary_id': ['SNOMED'],
+                'concept_code': [str(p) for p in expression_parents]
+                }
         parents_concepts: pd.DataFrame = self.query_table('concept', **query)
 
         remapped = []
@@ -204,7 +204,7 @@ class OmopVocabulary(abc.ABC):
             for target in self.get_mapping(parent_row['concept_id']):
                 remapped.append(self.query_table('concept', concept_id=[target]))
         parents_concepts = pd.concat(
-            (*remapped, parents_concepts[~parents_concepts["standard_concept"].isnull()])).drop_duplicates()
+                (*remapped, parents_concepts[~parents_concepts["standard_concept"].isnull()])).drop_duplicates()
 
         if report_parents:
             self.logger.info("Found parents:")
@@ -218,22 +218,22 @@ class OmopVocabulary(abc.ABC):
         expression_class = parents_concepts.loc[0, 'concept_class_id']
 
         # Work on the inserts:
-        insert_shared = {
-            'valid_start_date': '19700101',
-            'valid_end_date': '20991231',
-            'invalid_reason': None
-            }
+        insert_shared: dict[str, [int | str | float | None]] = {
+                'valid_start_date': '19700101',
+                'valid_end_date': '20991231',
+                'invalid_reason': None
+                }
         #  - CONCEPT
         inserts['concept'] = [{
-            'concept_id': expression_id,
-            'concept_name': expression_name,
-            'domain_id': expression_domain,
-            'vocabulary_id': vocabulary_id,
-            'concept_class_id': expression_class,
-            'concept_code': expression_fingerprint,
-            'standard_concept': 'S',
-            **insert_shared
-            }]
+                'concept_id': expression_id,
+                'concept_name': expression_name,
+                'domain_id': expression_domain,
+                'vocabulary_id': vocabulary_id,
+                'concept_class_id': expression_class,
+                'concept_code': expression_fingerprint,
+                'standard_concept': 'S',
+                **insert_shared
+                }]
 
         #  - CONCEPT_RELATIONSHIP
         #  -- 'Is a' to discovered parents
@@ -241,18 +241,18 @@ class OmopVocabulary(abc.ABC):
 
         for parent_id in parents_concepts['concept_id']:
             insert_isa = {
-                'concept_id_1': expression_id,
-                'concept_id_2': parent_id,
-                'relationship_id': 'Is a',
-                **insert_shared
-                }
+                    'concept_id_1': expression_id,
+                    'concept_id_2': parent_id,
+                    'relationship_id': 'Is a',
+                    **insert_shared
+                    }
 
             insert_subsumes = {
-                'concept_id_1': parent_id,
-                'concept_id_2': expression_id,
-                'relationship_id': 'Subsumes',
-                **insert_shared
-                }
+                    'concept_id_1': parent_id,
+                    'concept_id_2': expression_id,
+                    'relationship_id': 'Subsumes',
+                    **insert_shared
+                    }
 
             inserts['concept_relationship'].append(insert_isa)  # type: ignore
             inserts['concept_relationship'].append(insert_subsumes)  # type: ignore
@@ -263,28 +263,28 @@ class OmopVocabulary(abc.ABC):
         #  -- 'Maps to'
         #  --- self
         for rel_id in ('Maps to', 'Mapped from'):
-            inserts['concept_relationship'].append(dict(
-                concept_id_1=expression_id,
-                concept_id_2=expression_id,
-                relationship_id=rel_id,
-                **insert_shared
-                ))
+            inserts['concept_relationship'].append({
+                    'concept_id_1': expression_id,
+                    'concept_id_2': expression_id,
+                    'relationship_id': rel_id,
+                    **insert_shared,
+                    })
 
         #  --- Source concept
         if source_id is not None:
-            inserts['concept_relationship'].append(dict(
-                concept_id_1=source_id,
-                concept_id_2=expression_id,
-                relationship_id='Maps to',
-                **insert_shared
-                ))
+            inserts['concept_relationship'].append({
+                    'concept_id_1': source_id,
+                    'concept_id_2': expression_id,
+                    'relationship_id': 'Maps to',
+                    **insert_shared
+                    })
 
-            inserts['concept_relationship'].append(dict(
-                concept_id_1=expression_id,
-                concept_id_2=source_id,
-                relationship_id='Mapped from',
-                **insert_shared
-                ))
+            inserts['concept_relationship'].append({
+                    'concept_id_1': expression_id,
+                    'concept_id_2': source_id,
+                    'relationship_id': 'Mapped from',
+                    **insert_shared
+                    })
 
         # - CONCEPT_ANCESTOR
         # Get slice of the dataframe that contains every parent's ancestors
@@ -310,11 +310,11 @@ class OmopVocabulary(abc.ABC):
 
         # Add quasiancestor link to self
         ancestor_self: dict = dict(
-            ancestor_concept_id=expression_id,
-            descendant_concept_id=expression_id,
-            min_levels_of_separation=0,
-            max_levels_of_separation=0
-            )
+                ancestor_concept_id=expression_id,
+                descendant_concept_id=expression_id,
+                min_levels_of_separation=0,
+                max_levels_of_separation=0
+                )
         inserts['concept_ancestor'].append(ancestor_self)
 
         # Add normalized & raw canonical forms as synonyms to source and synthetic concepts
@@ -329,7 +329,7 @@ class OmopVocabulary(abc.ABC):
                             'concept_id': c_id,
                             'concept_synonym_name': expr,
                             'language_concept_id': EXPRESSION_LANGUAGE,
-                        })
+                            })
         return inserts
 
     def map_to(self, source_id: int, target_id: int, follow_mapping: bool = True) -> VocabularyInsert:
@@ -340,25 +340,25 @@ class OmopVocabulary(abc.ABC):
             return self.join_inserts(*mapping_dicts)
 
         insert_shared = {
-            'valid_start_date': '19700101',
-            'valid_end_date': '20991231',
-            'invalid_reason': None
-            }
+                'valid_start_date': '19700101',
+                'valid_end_date': '20991231',
+                'invalid_reason': None
+                }
 
         out = {"concept_relationship": [
-            {
-                'concept_id_1': source_id,
-                'concept_id_2': target_id,
-                'relationship_id': 'Maps to',
-                **insert_shared
-                },
-            {
-                'concept_id_1': target_id,
-                'concept_id_2': source_id,
-                'relationship_id': 'Mapped from',
-                **insert_shared
-                }
-            ]}
+                {
+                        'concept_id_1': source_id,
+                        'concept_id_2': target_id,
+                        'relationship_id': 'Maps to',
+                        **insert_shared
+                        },
+                {
+                        'concept_id_1': target_id,
+                        'concept_id_2': source_id,
+                        'relationship_id': 'Mapped from',
+                        **insert_shared
+                        }
+                ]}
         return out
 
     def snomed_us_date(self) -> datetime.date:
