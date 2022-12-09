@@ -120,7 +120,11 @@ class JackalopeREST:
                 server_logger.warning("Specified Pickle file not found!")
 
         server_logger.info("Loading SNOMED Ontology from source RF2 files.")
-        self.ont = ontology.Ontology.build(self.snomed_path)
+        try:
+            self.ont = ontology.Ontology.build(self.snomed_path)
+        except FileNotFoundError:
+            server_logger.warning("Specified SNOMED path not found! Use --download to download SNOMED US edition.")
+            raise
         self.ont.populate(dump_filename="SNOMED")
 
         server_logger.info("Done.")
@@ -286,8 +290,12 @@ def main():
         DEFAULT_ARGS = json.load(f)
 
     # Read if "--not-stateless" is passed as command line argument
-    if len(sys.argv) > 1 and sys.argv[1] == '--not-stateless':
-        DEFAULT_ARGS['stateless'] = False
+    if len(sys.argv) > 1:
+        if '--not-stateless' in sys.argv:
+            DEFAULT_ARGS['stateless'] = False
+        if '--download' in sys.argv:
+            # Break the execution and download the vocabulary
+            raise NotImplementedError("Download not implemented yet.")
 
     start_server(**DEFAULT_ARGS)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import zipfile
 from typing import Iterable
 import datetime
 import functools
@@ -10,6 +11,7 @@ import pathlib
 
 import networkx as nx
 import pandas as pd
+import requests
 
 from core import expression
 from core import data_model
@@ -34,7 +36,7 @@ class AccidentalEquivalency(BaseException):
         return f"Mapping to {self.sctid} must be done instead."
 
 
-class Ontology(nx.DiGraph):
+class Ontology(nx.DiGraph, data_model.OntologyInterface):
     concept_df: pd.DataFrame
     description_df: pd.DataFrame
     inferred_df: pd.DataFrame
@@ -441,7 +443,7 @@ class Ontology(nx.DiGraph):
             # Add previous node as ancestor:
             ancestors.add(breadcrumb[-1])
 
-    def expression_hierarchy(self, expr: expression.Expression) -> list[int]:
+    def expression_hierarchy(self, expr: expression.Expression) -> set[int]:
         """Returns the position in hierarchy of the given expression as a list of immediate parents"""
         # Despite our concepts being usually Fully defined, we don't want to build descendants for them (yet)
         ancestral_nodes = set()
@@ -451,9 +453,31 @@ class Ontology(nx.DiGraph):
                                          visited_nodes=set(), ancestors=ancestral_nodes)
 
         # Remove redundant ancestors
-        clean_list = list(self.remove_redundant_parents(ancestral_nodes))
+        clean_list = self.remove_redundant_parents(ancestral_nodes)
 
         return clean_list
 
     def get_relationship_groups(self, concept_id: int) -> list[data_model.RelationshipGroup]:
         return self.nodes[concept_id]['relationships']
+
+    @staticmethod
+    def download_snomed_us(month: int, year: int, api_key: str, path: str | pathlib.Path) -> None:
+        """Downloads the US edition of SNOMED CT from the UMLS website using the user API key"""
+        url = f"https://uts-ws.nlm.nih.gov/download" \
+              f"?url=https://download.nlm.nih.gov/mlb/utsauth/USExt/SnomedCT_USEditionRF2_PRODUCTION_" \
+              f"{year}{month}01T120000Z.zip" \
+              f"&apiKey={api_key}"
+
+        # Create the directory if it doesn't exist
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+        # Save the archive to the given path
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+        # Extract the "Snapshot" directory from archive at the same path
+        with zipfile.ZipFile(path, 'r') as zip_ref:
+            zip_ref.extractall(path, members=[m for m in zip_ref.namelist() if m.startswith('Snapshot/')])
