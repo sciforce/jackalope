@@ -215,7 +215,7 @@ class OmopVocabulary(abc.ABC):
         expression_domain = VALID_DOMAINS[min(VALID_DOMAINS.index(d) for d in parents_concepts['domain_id'])]
 
         # Take first concept class: it's not as relevant
-        expression_class = parents_concepts.loc[0, 'concept_class_id']
+        expression_class = parents_concepts.loc[0:0, 'concept_class_id']
 
         # Work on the inserts:
         insert_shared: dict[str, [int | str | float | None]] = {

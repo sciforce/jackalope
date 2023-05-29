@@ -52,6 +52,7 @@ class ForwardedEngine:
             metadata: sa.MetaData = _OMOP_metadata,
             resolve_metadata: bool = False,
             permanent_connection: bool = False,
+            schema: str = None
             ) -> None:
         self._db_address = db_address, db_port
         self._resolve_metadata = resolve_metadata
@@ -73,6 +74,7 @@ class ForwardedEngine:
         self.engine = None
         self.metadata: sa.MetaData = metadata
         self._session: Session | None = None
+        self._schema = schema
 
         self._url_template = (f"{protocol}://"f"{db_user}{':'+db_password if db_password else ''}@"
                               "{ip}:{port}"  # Will be replaced with address
@@ -97,7 +99,8 @@ class ForwardedEngine:
         else:
             self.engine = sa.create_engine(self._url_template.format(
                     ip=self._db_address[0], port=self._db_address[1],
-                    ))
+                    ),
+                execution_options={"schema_translate_map": {None: self._schema}})
 
         self.metadata.bind = self.engine
 
@@ -414,7 +417,6 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
                 # Work around circular foreign keys
                 session.execute('SET CONSTRAINTS ALL DEFERRED')
                 for tablename, inserts in inserts_dict.items():
-
                     table_class = get_mapper_class(tablename)
                     primary_keys = inspect(table_class).primary_key
 
