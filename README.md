@@ -9,7 +9,7 @@ Scroll to the bottom of the document for API reference.
 ### Read more:
 * [Sciforce](https://sciforce.solutions/industries/medtech)
 * [OHDSI](https://www.ohdsi.org/)
-* [Jackalope presentation](https://www.ohdsi.org/2022showcase-41/)
+* [Jackalope showcase](https://www.ohdsi.org/2022showcase-41/)
 
 # Background
 SNOMED CT is a large, complex, and highly structured ontology. It also 
@@ -100,8 +100,12 @@ Its fields are:
  * `pickle_ont` - path where to store (and look for) the binary file of cached SNOMED Ontology.
  * `connection_properties` - path to the connection properties file. Default is `connection_properties.json`.
  * `rebuild_omop` - whether to reset **all** custom concepts in the OMOP CDM instance on connect. Default is `false`.
+ * `stateless` - whether to run the server in stateless mode. Default is `false`. When set to `true`, will  not make any changes to the database,
+and instead output the changes in JSON format to `stdout`. This is useful for open use web-service implementation. Important:
+all `concept_id` and `concept_code` will be set to 0 or `null` in this mode, except for hash-generated. This option is ignored if
+filename is passed as a command line argument.
 
- on the first run, Jackalope will pickle SNOMED CT ontology file for faster loading.
+On the first run, Jackalope will pickle SNOMED CT ontology file for faster loading.
  
 ## Running Jackalope
 Jackalope can be run in two ways:

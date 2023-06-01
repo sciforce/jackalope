@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from getpass import getpass
-from typing import Optional, Type, TypeVar, Any
+from typing import Type, TypeVar, Any
 
 import sqlalchemy as sa
 import sshtunnel
@@ -45,13 +45,14 @@ class ForwardedEngine:
             db_address: str,
             db_port: int,
             db_name: str,
-            ssh_address: Optional[str] = None,
-            ssh_port: Optional[int] = None,
-            ssh_username: Optional[str] = None,
-            ssh_password: Optional[str] = None,
+            ssh_address: str | None = None,
+            ssh_port: int | None = None,
+            ssh_username: str | None = None,
+            ssh_password: str | None = None,
             metadata: sa.MetaData = _OMOP_metadata,
             resolve_metadata: bool = False,
             permanent_connection: bool = False,
+            schema: str = None
             ) -> None:
         self._db_address = db_address, db_port
         self._resolve_metadata = resolve_metadata
@@ -73,6 +74,7 @@ class ForwardedEngine:
         self.engine = None
         self.metadata: sa.MetaData = metadata
         self._session: Session | None = None
+        self._schema = schema
 
         self._url_template = (f"{protocol}://"f"{db_user}{':'+db_password if db_password else ''}@"
                               "{ip}:{port}"  # Will be replaced with address
@@ -97,7 +99,8 @@ class ForwardedEngine:
         else:
             self.engine = sa.create_engine(self._url_template.format(
                     ip=self._db_address[0], port=self._db_address[1],
-                    ))
+                    ),
+                execution_options={"schema_translate_map": {None: self._schema}})
 
         self.metadata.bind = self.engine
 
@@ -414,7 +417,6 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
                 # Work around circular foreign keys
                 session.execute('SET CONSTRAINTS ALL DEFERRED')
                 for tablename, inserts in inserts_dict.items():
-
                     table_class = get_mapper_class(tablename)
                     primary_keys = inspect(table_class).primary_key
 
@@ -476,7 +478,7 @@ class OmopVocabularySQL(core.vocab.OmopVocabulary):
         with self.start_session() as session:
             return session.execute(query).fetchone()[0]
 
-    def _last_id_in_range(self, range_start: Optional[int] = 0, range_end: Optional[int] = None) -> int:
+    def _last_id_in_range(self, range_start: int = 0, range_end: int | None = None) -> int:
         query = sa.select(Concept.concept_id).order_by(Concept.concept_id).limit(1)
         if range_end is not None:
             query = query.where(Concept.concept_id.between(range_start, range_end - 1))

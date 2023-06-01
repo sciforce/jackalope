@@ -2,18 +2,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Protocol, Optional, Iterator
+from datetime import datetime
+from typing import Iterable, Protocol, Iterator, Any
+import typing
+import pandas as pd
 
-import networkx as nx
 
-from core import ontology
+@typing.runtime_checkable
+class OntologyInterface(Protocol):
+    mrcm_domain_df: pd.DataFrame
+    version: dict[str, datetime.date]
+
+    def is_descendant(self, concept_id: int, ancestor_id: int) -> HierarchicalMatch:
+        ...
+
+    def is_primitive(self, concept_id: int) -> bool:
+        ...
+
+    def primitive_parents(self, concept_id: int) -> set[int]:
+        ...
+
+    def remove_redundant_parents(self, concept_ids: Iterable[int]) -> set[int]:
+        ...
+
+    def remove_redundant_children(self, concept_ids: Iterable[int]) -> set[int]:
+        ...
+
+    def expression_hierarchy(self, expression: Any) -> set[int]:
+        ...
+
+    def get_relationship_groups(self, concept_id: int) -> list[RelationshipGroup]:
+        ...
 
 
 class MetaRelationship(Protocol):
     typeId: int
     ord: int
 
-    def descends_from(self, rel2: MetaRelationship, ont: nx.DiGraph) -> HierarchicalMatch:
+    def descends_from(self, rel2: MetaRelationship, ont: OntologyInterface) -> HierarchicalMatch:
         ...
 
     def substitute_sctid(self, old_id: int, new_id: int) -> MetaRelationship:
@@ -23,7 +49,7 @@ class MetaRelationship(Protocol):
         ...
 
 
-_RawRelationshipGroup = dict[int, list[MetaRelationship]]
+RawRelationshipGroup = dict[int, list[MetaRelationship]]
 
 
 @dataclass(slots=True, frozen=True, order=True)
@@ -62,7 +88,7 @@ class Relationship:
     destinationId: int
     ord: int = 1
 
-    def descends_from(self, rel2: MetaRelationship, ont: ontology.Ontology) -> HierarchicalMatch:
+    def descends_from(self, rel2: MetaRelationship, ont: OntologyInterface) -> HierarchicalMatch:
         # Never true for ConcreteRelationship:
         if not isinstance(rel2, type(self)):
             return HierarchicalMatch(-1)
@@ -155,9 +181,9 @@ class RelationshipGroup:
     def descends_from(
             self,
             relg2: RelationshipGroup,
-            ont: nx.DiGraph,
-            addl_atrs: Optional[Iterable[MetaRelationship]] = None,
-            set_to_clear: Optional[set[MetaRelationship]] = None) -> HierarchicalMatch:
+            ont: OntologyInterface,
+            addl_atrs: Iterable[MetaRelationship] | None = None,
+            set_to_clear: set[MetaRelationship] | None = None) -> HierarchicalMatch:
         """
         We consider match successfull, if all attributes from parent have descendants among self;
         If matches were not found in group, check additional attributes.

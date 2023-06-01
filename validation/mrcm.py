@@ -1,7 +1,7 @@
 # Copyrigt 2022 Sciforce
 from __future__ import annotations
 
-from core import ontology
+from core import data_model
 from core.expression import Expression
 from utils.constants import ALLOW_NONRECOMMENDED
 from utils import constants
@@ -28,7 +28,7 @@ def _parse_cardinality(cardinality: str) -> validation.data_atoms.Cardinality:
 
 class MRCMValidator:
 
-    def __init__(self, ont: ontology.Ontology) -> None:
+    def __init__(self, ont: data_model.OntologyInterface) -> None:
         self.domain_rules: list[validation.data_atoms.DomainRule] = []
         self._snomed = ont
 

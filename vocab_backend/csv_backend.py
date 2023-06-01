@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
-from typing import Iterable, Optional, Any
+from typing import Iterable, Any
 
 import core.data_model
 import core.ontology
@@ -30,7 +30,7 @@ class OmopVocabularyCSV(core.vocab.OmopVocabulary):
             }
 
     def __init__(self, path: str,
-                 source_concept_id: Optional[Iterable[int]] = None) -> None:
+                 source_concept_id: Iterable[int] | None = None) -> None:
 
         # Remember path to write down delta:
         self._path = path
@@ -140,7 +140,7 @@ class OmopVocabularyCSV(core.vocab.OmopVocabulary):
                 .astype(np.int64)
                 .max())
 
-    def _last_id_in_range(self, range_start: Optional[int] = 0, range_end: Optional[int] = None) -> int:
+    def _last_id_in_range(self, range_start: int = 0, range_end: int | None = None) -> int:
         if range_end is not None:
             idx = self.concept['concept_id'].between(range_start, range_end, inclusive='left')
         else:

@@ -11,8 +11,6 @@ from flask import jsonify
 from flask import request
 from flask_pydantic import validate
 
-import validation.data_atoms
-import validation.mrcm
 from core import expression_process
 from core import ontology
 from core import vocab
@@ -29,7 +27,7 @@ server_logger = jacka_logger.getChild('RESTServer')
 app = Flask('Jackalope')
 
 
-def get_instance() -> JackalopeREST | None:
+def _get_instance() -> JackalopeREST | None:
     return JackalopeREST.instance
 
 
@@ -41,7 +39,9 @@ class JackalopeREST:
     voc: vocab.OmopVocabulary
 
     def __new__(cls, **kwargs):
-        """Singleton pattern. Only overwrite singleton instance if new set of kwargs is provided."""
+        """Singleton pattern. Only overwrite singleton instance if new set of kwargs is provided.
+        We use singleton because Flask only allows top-level functions to be exposed as endpoints.
+        """
         if cls.instance is None or kwargs:
             cls.instance = super().__new__(cls)
             cls.instance._init(**kwargs)
@@ -50,14 +50,15 @@ class JackalopeREST:
             return cls.instance
 
     def _init(self, **kwargs):
-        self.rebuild_omop = kwargs.get('rebuild_omop', True)
-        self.backend = kwargs.get('backend', 'sql')
-        self.snomed_path = kwargs.get('snomed_path', None)
-        self.vocabs_path = kwargs.get('vocabs_path', None)
-        self.pickled_ont_path = kwargs.get('pickle_ont', None)
-        self.host = kwargs.get('host', JACKALOPE_HOST)
-        self.port = kwargs.get('port', JACKALOPORT)
-        self.sql_connection_options = kwargs.get('connection_properties', None)
+        self.rebuild_omop: bool = kwargs.get('rebuild_omop', True)
+        self.backend: str = kwargs.get('backend', 'sql')
+        self.snomed_path: str = kwargs.get('snomed_path', None)
+        self.vocabs_path: str = kwargs.get('vocabs_path', None)
+        self.pickled_ont_path: str = kwargs.get('pickle_ont', None)
+        self.host: str = kwargs.get('host', JACKALOPE_HOST)
+        self.port: int = kwargs.get('port', JACKALOPORT)
+        self.sql_connection_options: str = kwargs.get('connection_properties', None)
+        self.stateless: bool = kwargs.get('stateless', False)
 
     def startup(self):
         server_logger.info(f"Starting up Jackalope REST server version {JACKALOPE_VERSION}.")
@@ -116,10 +117,14 @@ class JackalopeREST:
                 self.ont = ontology.Ontology.load(self.pickled_ont_path)
                 return
             except FileNotFoundError:
-                server_logger.warning("Specified Pickle file not found! Attempting to load from SNOMED path.")
+                server_logger.warning("Specified Pickle file not found!")
 
         server_logger.info("Loading SNOMED Ontology from source RF2 files.")
-        self.ont = ontology.Ontology.build(self.snomed_path)
+        try:
+            self.ont = ontology.Ontology.build(self.snomed_path)
+        except FileNotFoundError:
+            server_logger.warning("Specified SNOMED path not found! Use --download to download SNOMED US edition.")
+            raise
         self.ont.populate(dump_filename="SNOMED")
 
         server_logger.info("Done.")
@@ -132,8 +137,8 @@ def version():
         return request_model.Version(
                 app=JACKALOPE_VERSION,
                 hasher=str(HASH_COMPATIBILITY_VERSION),
-                snomed_omop=str(get_instance().voc_version),
-                snomed_rf2=str(get_instance().ont_version)
+                snomed_omop=str(_get_instance().voc_version),
+                snomed_rf2=str(_get_instance().ont_version)
             )
 
 
@@ -142,7 +147,7 @@ def version():
 def concept_info():
     if request.method == 'GET':
         concept_id = request.args['concept_id']
-        concept = (get_instance().voc.query_table('concept', concept_id=[concept_id])
+        concept = (_get_instance().voc.query_table('concept', concept_id=[concept_id])
                    .iloc[0]
                    .to_dict())
         return request_model.ConceptInfo(concept_data=concept)
@@ -153,14 +158,20 @@ def concept_info():
 def add_vocab():
     if request.method == 'POST':
         data = request.get_json()
-        vocab_inserts = get_instance().voc.add_vocabulary(
+        vocab_inserts = _get_instance().voc.add_vocabulary(
                 vid=data['vocabulary_id'],
                 name=data['vocabulary_name'],
                 reference=data['vocabulary_reference'],
                 version=data['vocabulary_version'],
+                generate_id=not _get_instance().stateless,
             )
-        get_instance().voc.execute_inserts(vocab_inserts)
-        return jsonify({})
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=vocab_inserts
+                )
+        else:
+            _get_instance().voc.execute_inserts(vocab_inserts)
+            return jsonify({})
 
 
 @app.route('/jackalope/v1.0/add/source_concept', methods=['POST'])
@@ -168,17 +179,22 @@ def add_vocab():
 def add_source_concept():
     if request.method == 'POST':
         data = request.get_json()
-        concept_insert = get_instance().voc.add_source_concept(
+        concept_insert = _get_instance().voc.add_source_concept(
                 concept_code=data['concept_code'],
                 concept_name=data['concept_name'],
                 vocabulary_id=data['vocabulary_id'],
                 concept_class_id=data['concept_class_id'],
                 domain_id=data['domain_id'],
                 synonyms=data.get('synonyms', None),
+                generate_id=not _get_instance().stateless
             )
-        get_instance().voc.execute_inserts(concept_insert)
-
-        return request_model.ConceptId(concept_id=concept_insert['concept'][0]['concept_id'])
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=concept_insert
+                )
+        else:
+            _get_instance().voc.execute_inserts(concept_insert)
+            return request_model.ConceptId(concept_id=concept_insert['concept'][0]['concept_id'])
 
 
 @app.route('/jackalope/v1.0/add/pce', methods=['POST'])
@@ -187,34 +203,28 @@ def add_post_coordinated_expression():
     if request.method == 'POST':
         data = request.get_json()
 
-        # Test if the expression is valid
-        pass
-
         # Deserialize the expression
-        pce_processor = expression_process.Processor(get_instance().ont)
-        pce = pce_processor.process(data['post_coordinated_expression'])[0]
-
-        # Validate the expression
         try:
-            get_instance().ont.validator.validate_expression(pce)
-        except validation.data_atoms.SCTIDInvalid as e:
-            return request_model.ValidationErrorResponse(
-                    error=f"{e.sctid} is not a valid SCTID.",
-                    expression="data['post_coordinated_expression']",
-                ), 422
-        except validation.data_atoms.MRCMValidationError as e:
-            return request_model.ValidationErrorResponse(
-                    error=e.message,
-                    expression=data['post_coordinated_expression'],
-                ), 422
+            pce_processor = expression_process.Processor()
+            pce = pce_processor.process(data['post_coordinated_expression'])[0]
+        except expression_process.SNOMEDExpressionsError as e:
+            # Return a 400 error if the expression is invalid
+            return jsonify({'error': str(e)}), 400
 
-        expression_insert = get_instance().voc.ingest_expression(
+        expression_insert = _get_instance().voc.ingest_expression(
                 pce,
-                get_instance().ont,
+                _get_instance().ont,
                 source_id=data['source_id'],
-                given_name=data.get('given_name', None)
+                given_name=data.get('given_name', None),
+                generate_ids=not _get_instance().stateless
                 )
-        get_instance().voc.execute_inserts(expression_insert)
+
+        if _get_instance().stateless:
+            return request_model.OMOPTableInserts(
+                    inserts=expression_insert
+                )
+
+        _get_instance().voc.execute_inserts(expression_insert)
 
         response = {
                 'concept_id': None,
@@ -242,8 +252,12 @@ def add_post_coordinated_expression():
 @validate(query=request_model.GetConcept)
 def unmap_concept():
     if request.method == 'DELETE':
+        # If server is stateless, return an error
+        if _get_instance().stateless:
+            return jsonify({'error': 'Server is stateless!'}), 400
+
         concept_id = request.args['concept_id']
-        changes = get_instance().voc.unmap(concept_id)
+        changes = _get_instance().voc.unmap(concept_id)
         return request_model.BoolResponse(changes_made=changes)
 
 
@@ -251,8 +265,12 @@ def unmap_concept():
 @validate(query=request_model.VocabId)
 def delete_vocabulary():
     if request.method == 'DELETE':
+        # If server is stateless, return an error
+        if _get_instance().stateless:
+            return jsonify({'error': 'Server is stateless!'}), 400
+
         vid = request.args['vocabulary_id']
-        get_instance().voc.drop_vocabulary(vid)
+        _get_instance().voc.drop_vocabulary(vid)
         return jsonify({})
 
 
@@ -270,6 +288,14 @@ def start_server(**kwargs):
 def main():
     with open('config.json') as f:
         DEFAULT_ARGS = json.load(f)
+
+    # Read if "--not-stateless" is passed as command line argument
+    if len(sys.argv) > 1:
+        if '--not-stateless' in sys.argv:
+            DEFAULT_ARGS['stateless'] = False
+        if '--download' in sys.argv:
+            # Break the execution and download the vocabulary
+            raise NotImplementedError("Download not implemented yet.")
 
     start_server(**DEFAULT_ARGS)
 

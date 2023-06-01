@@ -2,14 +2,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import pydantic
-from core import ontology
 from core import data_model
 from utils.constants import CONCEPT_MODEL_ATTRIBUTE
 from utils.constants import UNAPPROVED_ATTRIBUTE
 from utils.constants import ALLOW_UNAPPROVED
-from typing import Optional
+from utils import logger
 
-validation_logger = ontology.onto_logger.getChild('Validation')
+validation_logger = logger.jacka_logger.getChild('Validation')
 
 
 Cardinality = tuple[int, int | None]
@@ -17,7 +16,7 @@ Cardinality = tuple[int, int | None]
 
 class SNOMEDConcept(pydantic.BaseModel):
     id: int
-    ontology: ontology.Ontology
+    ontology: data_model.OntologyInterface
 
     @pydantic.root_validator
     @classmethod
@@ -36,14 +35,14 @@ class SNOMEDConcept(pydantic.BaseModel):
 
 class ValidatedRelationship(pydantic.BaseModel):
     typeId: int
-    destinationId: Optional[int]
-    concreteValue: Optional[str | int | float | bool]
-    parent_ontology: ontology.Ontology
+    destinationId: int | None
+    concreteValue: str | int | float | bool | None
+    parent_ontology: data_model.OntologyInterface
 
     @pydantic.root_validator()
     @classmethod
     def check_type_is_attribute(cls, values):
-        ont: ontology.Ontology = values['parent_ontology']
+        ont: data_model.OntologyInterface = values['parent_ontology']
         v: int = values['typeId']
         if ont.is_descendant(v, UNAPPROVED_ATTRIBUTE):
             if not ALLOW_UNAPPROVED:

@@ -3,13 +3,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
-import networkx as nx
-
 from utils import hashing
-from core import ontology
-from core.data_model import _RawRelationshipGroup
-from core.data_model import MetaRelationship
-from core.data_model import RelationshipGroup
+from core import data_model
 
 
 class Expression:
@@ -45,7 +40,7 @@ class Expression:
         self.normalized = None
 
     def add_relationship_group(self, relationship_group) -> None:
-        if not isinstance(relationship_group, RelationshipGroup):
+        if not isinstance(relationship_group, data_model.RelationshipGroup):
             raise TypeError("relationship_group must be a RelationshipGroup object!")
 
         self.relationship_groups.append(relationship_group)
@@ -55,7 +50,7 @@ class Expression:
         self.definition_status = definition_status
         self.normalized = None
 
-    def normal_form(self, ont: ontology.Ontology) -> Expression:
+    def normal_form(self, ont: data_model.OntologyInterface) -> Expression:
         """Infer attribute defintions and proximal primitives from all stated parents and return a new Expression """
 
         # If we have already normalized this expression, return the cached version
@@ -63,18 +58,18 @@ class Expression:
             return self.normalized
 
         # Collect proximal primitive parents, ungroupped attributes and separated attribute groups
-        new_parents: list[int] = []
-        parent_attrs: list[MetaRelationship] = []
-        parent_groups: list[RelationshipGroup] = []
+        new_parents: set[int] = set()
+        parent_attrs: list[data_model.MetaRelationship] = []
+        parent_groups: list[data_model.RelationshipGroup] = []
 
         # Collect definitions from stated parents first
         for stated_parent in self.parent_concepts:
             # First, infer the proximal primitive ancestors from each of the stated parents:
-            new_parents.extend(ont.primitive_parents(stated_parent))
+            new_parents.update(ont.primitive_parents(stated_parent))
 
             # Next, get the attributes from each of the stated parents.
             # We will separate them into ungroupped attributes and attribute groups
-            rels = list(ont.nodes[stated_parent]['relationships'])
+            rels = list(ont.get_relationship_groups(stated_parent))
 
             # If there is exactly one group and no ungroupped attributes, demote to ungroupped.
             # This may violate "machine-readable concept model", but it does not matter for post-coordination purposes
@@ -130,11 +125,9 @@ class Expression:
                     if rel is other_rel:
                         continue
 
-                    if (
-                            rel.typeId == other_rel.typeId and
+                    if (rel.typeId == other_rel.typeId and
                             not (rel.descends_from(other_rel, ont) or
-                                 other_rel.descends_from(rel, ont))
-                       ):
+                                 other_rel.descends_from(rel, ont))):
                         duplicating_rels.add(rel)
                         duplicating_rels.add(other_rel)
 
@@ -149,7 +142,7 @@ class Expression:
 
         # De-serialize groups to immutable RelationshipGroup objects
         for idx in g_keys:
-            nnf.add_relationship_group(RelationshipGroup.freeze(new_g[idx]))
+            nnf.add_relationship_group(data_model.RelationshipGroup.freeze(new_g[idx]))
 
         # Infer definition status and share concept_id with the original expression
         nnf.concept_id = self.concept_id
@@ -162,8 +155,9 @@ class Expression:
         # Return the completed normalized form
         return nnf
 
-    def _collect_relationships(self, parent_attrs: Iterable[MetaRelationship],
-                               parent_groups: Iterable[RelationshipGroup]) -> _RawRelationshipGroup:
+    def _collect_relationships(self, parent_attrs: Iterable[data_model.MetaRelationship],
+                               parent_groups: Iterable[data_model.RelationshipGroup]
+                               ) -> data_model.RawRelationshipGroup:
         """Place together ungrouped relationships and the groups"""
         out = {0: []}
 
@@ -179,8 +173,8 @@ class Expression:
         return out
 
     @staticmethod
-    def _clean_relationships(ont: nx.DiGraph,
-                             relationship_groups: _RawRelationshipGroup) -> None:
+    def _clean_relationships(ont: data_model.OntologyInterface,
+                             relationship_groups: data_model.RawRelationshipGroup) -> None:
         """Mutate the groupped relationships, removing dublicates and redundancies"""
 
         # Remove duplicates and ancestors between ungroupped relationships:
@@ -217,7 +211,7 @@ class Expression:
                     if number_2 in redundant_groups or number_2 == 0 or number == number_2:
                         continue
 
-                    rg, rg2 = RelationshipGroup.freeze(group), RelationshipGroup.freeze(group_2)
+                    rg, rg2 = data_model.RelationshipGroup.freeze(group), data_model.RelationshipGroup.freeze(group_2)
 
                     if rg == rg2 and number > number_2:
                         redundant_groups.append(number)
@@ -270,7 +264,7 @@ class Expression:
 
             relationship_groups[0] = [r for r in relationship_groups[0] if r not in redundant]
 
-    def canonical(self, ont: ontology.Ontology, raw=False) -> str:
+    def canonical(self, ont: data_model.OntologyInterface, raw=False) -> str:
         """Returns a canonical form for hashing purposes. Raw parameter controls if thhe expression is to be
         normalized first. """
         if self._cf_cache is not None and not raw:
@@ -306,11 +300,11 @@ class Expression:
             self._cf_cache = c_form
         return c_form
 
-    def concept_id_tail(self, ont: ontology.Ontology, length: int = 9) -> int:
+    def concept_id_tail(self, ont: data_model.OntologyInterface, length: int = 9) -> int:
         full_hash = hashing.jackalope_hash_id(self.canonical(ont))
         return full_hash % 10 ** length
 
-    def hash_concept_code(self, ont: ontology.Ontology) -> str:
+    def hash_concept_code(self, ont: data_model.OntologyInterface) -> str:
         return hashing.jackalope_hash_code(self.canonical(ont))
 
     def substitute_sctid(self, old_id: int, new_id: int) -> None:
@@ -318,7 +312,8 @@ class Expression:
                                     for group in self.relationship_groups]
         self._cf_cache = None
 
-    def get_attribute_counts(self, use_ontology: ontology.Ontology | None = None) -> dict[int, dict[int, int]]:
+    def get_attribute_counts(self,
+                             use_ontology: data_model.OntologyInterface | None = None) -> dict[int, dict[int, int]]:
         """Returns a dictionary of attribute type ids and their counts per group in the expression.
         If "use_ontology" is not None, the counts are calculated with respect to subtype inheritance.
         """
