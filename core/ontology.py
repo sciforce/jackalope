@@ -110,7 +110,7 @@ class Ontology(nx.DiGraph, data_model.OntologyInterface):
         onto_logger.info(f"Loading the ontology from {rf2_path}")
 
         def match_file(pattern: str, *parents: str) -> str:
-            files = pathlib.Path(rf2_path).glob(os.path.join(*parents, pattern))
+            files=os.listdir(os.path.join(rf2_path, *parents))
             onto_logger.info(f"Matching '{pattern}' in {parents[0]}...")
 
             for filename in files:
@@ -119,6 +119,7 @@ class Ontology(nx.DiGraph, data_model.OntologyInterface):
                     return os.path.join(rf2_path, *parents, filename)
 
             raise FileNotFoundError(f"No match found for pattern {pattern}")
+
 
         # Terminology files
         concept_file_path = match_file("Concept", "Terminology")
